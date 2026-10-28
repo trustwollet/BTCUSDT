@@ -119,6 +119,13 @@
   .edge { margin-top: 11px; font-size: 11.5px; line-height: 1.5; padding: 9px 11px; border-radius: 9px; }
   .edge.real { background: rgba(22,199,132,.09); border: 1px solid rgba(22,199,132,.28); color: var(--up); }
   .edge.none { background: rgba(245,165,36,.09); border: 1px solid rgba(245,165,36,.28); color: var(--flat); }
+  .tstate { margin-top: 4px; font: 800 20px/1.2 system-ui; letter-spacing: .04em; text-transform: uppercase; }
+  .tstate.wait { color: var(--flat); font-size: 13px; font-weight: 600; letter-spacing: .01em; text-transform: none; }
+  .tstate.long { color: var(--up); } .tstate.short { color: var(--down); } .tstate.dead { color: #6b7280; }
+  .chk { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 11.5px; }
+  .chk span { color: #6b7280; } .chk span.ok { color: var(--up); }
+  /* the trade card's labels are the shorter side, so let the values wrap instead */
+  #tPlan span:nth-child(odd), #tStats span:nth-child(odd) { white-space: nowrap; }
   @media (max-width: 640px) {
     .topbar { gap: 10px; } .symbol { font-size: 17px; } .price { font-size: 22px; }
     .card { padding: 14px; border-radius: 14px; } .ctools button { min-width: 30px; padding: 5px 8px; }
@@ -185,6 +192,15 @@
         <div class="prob-lbl"><span id="pfupt">UP 50%</span><span id="pfdnt">50% DOWN</span></div>
         <div class="kv" id="fc"></div>
         <div class="edge" id="edge"></div>
+      </div>
+
+      <div class="card">
+        <h3>5-minute trade</h3>
+        <div class="tstate wait" id="tState">building the 5m sample…</div>
+        <div class="kv" id="tPlan"></div>
+        <div class="chk" id="tChecks"></div>
+        <div class="kv" id="tStats"></div>
+        <div class="edge none" id="tNote"></div>
       </div>
 
       <div class="card">
@@ -372,6 +388,11 @@ const SOURCES = [
       const c = k[0];
       return { kline: { t: +c[0], o: +c[1], h: +c[2], l: +c[3], c: +c[4], v: +c[5], tb: +c[9] } };
     },
+    async klinePage(iv, end, limit) {
+      const k = await getJson(`https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=${iv}`
+        + `&limit=${Math.min(1500, limit)}&endTime=${end}`, 15000);
+      return k.map(x => [+x[0], +x[1], +x[2], +x[3], +x[4], +x[5], +x[9]]);
+    },
     stream(iv, onMsg) {
       const ws = new WebSocket('wss://fstream.binance.com/stream?streams=btcusdt@bookTicker/btcusdt@kline_' + iv);
       ws.onmessage = e => {
@@ -413,6 +434,12 @@ const SOURCES = [
       const k = await getJson(`https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT&interval=${ivBybit(iv)}&limit=1`, 8000);
       const c = k.result.list[0];
       return { kline: { t: +c[0], o: +c[1], h: +c[2], l: +c[3], c: +c[4], v: +c[5], tb: null } };
+    },
+    async klinePage(iv, end, limit) {
+      const k = await getJson(`https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT`
+        + `&interval=${ivBybit(iv)}&limit=${Math.min(1000, limit)}&end=${end}`, 15000);
+      return (k.result && k.result.list || []).slice().reverse()
+        .map(x => [+x[0], +x[1], +x[2], +x[3], +x[4], +x[5], null]);
     },
     stream(iv, onMsg) {
       const ws = new WebSocket('wss://stream.bybit.com/v5/public/linear');
@@ -457,6 +484,11 @@ const SOURCES = [
       const k = await getJson(`https://www.okx.com/api/v5/market/candles?instId=BTC-USDT-SWAP&bar=${iv}&limit=1`, 8000);
       const c = k.data[0];
       return { kline: { t: +c[0], o: +c[1], h: +c[2], l: +c[3], c: +c[4], v: +c[5], tb: null } };
+    },
+    async klinePage(iv, end, limit) {
+      const k = await getJson(`https://www.okx.com/api/v5/market/candles?instId=BTC-USDT-SWAP&bar=${iv}`
+        + `&limit=${Math.min(300, limit)}&after=${end}`, 15000);
+      return (k.data || []).slice().reverse().map(x => [+x[0], +x[1], +x[2], +x[3], +x[4], +x[5], null]);
     }
   }
 ];
@@ -622,6 +654,205 @@ const NF2 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFr
 const NF0 = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const fmt = n => n == null ? '—' : NF2.format(n);
 
+// ---- 5-minute trade signal -------------------------------------------------
+// Pullback-and-reclaim inside the trend: four core conditions gate the entry (trend, dip
+// through EMA21, close back above it, ATR in a sane band); the rest are confirmation badges.
+// Every signal is bracketed 1 ATR stop / 2 ATR target / 6 bars and scored against the same
+// bracket with no filter at all. It arms only when the net-of-fee expectancy clears a
+// significance gate; otherwise the honest answer on the card is "no trade".
+const TRADE_IV = '5m', TRADE_H = 6, TRADE_RR = 2, COST = 0.0012, TRADE_WANT = 2400;
+
+async function deep5m() {
+  const src = state.src, pages = [];
+  let end = Date.now();
+  for (let i = 0; i < 6 && pages.reduce((a, p) => a + p.length, 0) < TRADE_WANT; i++) {
+    const page = await soft(src.klinePage(TRADE_IV, end, 1000));
+    if (!page || page.length < 2) break;
+    pages.unshift(page);
+    end = page[0][0] - 1;
+  }
+  const out = [];
+  for (const row of [].concat(...pages))
+    if (!out.length || row[0] > out[out.length - 1][0]) out.push(row);
+  while (out.length && out[out.length - 1][0] + IV_MS[TRADE_IV] > Date.now()) out.pop();
+  return out;
+}
+
+function tradeSeries(cs) {
+  const closes = cs.map(c => c[4]);
+  const roll = new Array(cs.length).fill(null);
+  let tb = 0, vv = 0, any = false;
+  for (let i = 0; i < cs.length; i++) {
+    tb += cs[i][6] || 0; vv += cs[i][5] || 0; any = any || cs[i][6] != null;
+    if (i >= 12) { tb -= cs[i - 12][6] || 0; vv -= cs[i - 12][5] || 0; }
+    if (i >= 11 && tb > 0 && vv > 0) roll[i] = tb / vv;
+  }
+  return { closes, e21: ema(closes, 21), e50: ema(closes, 50), atrS: atr(cs), macd: macd(closes),
+           roll: any ? roll : null };
+}
+
+// null = not evaluable, {ok, fails} = the condition board for this bar and direction
+function setupAt(cs, s, i, dir) {
+  const c = cs[i], p = cs[i - 1], a = s.atrS[i];
+  if (!c || !p || !a || s.e21[i] == null || s.e50[i] == null) return null;
+  const cl = c[4], h = s.macd.hist, hOk = h[i] != null && h[i - 1] != null;
+  let vol20 = 0, vn = 0;
+  for (let j = i - 20; j < i; j++) if (j >= 0) { vol20 += cs[j][5]; vn++; }
+  const flow = s.roll && s.roll[i];
+  const checks = [
+    ['Trend aligned', dir * (cl - s.e50[i]) > 0 && dir * (s.e21[i] - s.e50[i]) > 0],
+    ['Dipped to EMA 21', dir > 0 ? c[3] < s.e21[i] : c[2] > s.e21[i]],
+    ['Closed over EMA 21', dir * (cl - s.e21[i]) > 0],
+    ['Broke prior bar', dir > 0 ? cl > p[2] : cl < p[3]],
+    ['Volume ≥ 1.25× avg', vn > 0 && c[5] >= 1.25 * vol20 / vn],
+    ['MACD turning', hOk && (dir > 0 ? h[i] > h[i - 1] : h[i] < h[i - 1])],
+    ['Taker flow ≥ 55%', flow == null ? null : dir > 0 ? flow >= 0.55 : flow <= 0.45],
+    ['ATR 0.04–0.6%', a / cl >= 0.0004 && a / cl <= 0.006]
+  ];
+  return { checks, ok: [0, 1, 2, 7].every(k => checks[k][1] === true) };
+}
+
+// Bracket in R multiples: 1 ATR stop, 2 ATR target, max TRADE_H bars.
+// Returns gross R (before fees) plus that trade's fee drag in R, so signal quality and
+// cost drag can be reported separately — on a 5m chart a 1 ATR stop can be smaller than the fee.
+function bracket(cs, s, i, dir) {
+  const e = cs[i][4], a = s.atrS[i], lastJ = Math.min(cs.length - 1, i + TRADE_H);
+  if (!a || lastJ <= i) return null;
+  const stop = e - dir * a, tgt = e + dir * TRADE_RR * a, costR = (COST * e) / a;
+  const gross = j => dir * (cs[j][4] - e) / a;
+  for (let j = i + 1; j <= lastJ; j++) {
+    if (dir > 0 ? cs[j][3] <= stop : cs[j][2] >= stop) return { r: -1, c: costR, f: a / e };   // stop wins a shared bar
+    if (dir > 0 ? cs[j][2] >= tgt : cs[j][3] <= tgt) return { r: TRADE_RR, c: costR, f: a / e };
+    if (j === lastJ) return { r: gross(j), c: costR, f: a / e };
+  }
+  return null;
+}
+
+function summarize(ts) {
+  const n = ts.length;
+  if (!n) return null;
+  const net = ts.map(t => t.r - t.c);
+  const avg = net.reduce((a, b) => a + b, 0) / n;
+  const gross = ts.reduce((a, t) => a + t.r, 0) / n;
+  const sd = Math.sqrt(net.reduce((a, r) => a + (r - avg) ** 2, 0) / (n - 1 || 1));
+  const gsd = Math.sqrt(ts.reduce((a, t) => a + (t.r - gross) ** 2, 0) / (n - 1 || 1));
+  const pos = net.filter(r => r > 0).reduce((a, b) => a + b, 0);
+  const neg = -net.filter(r => r <= 0).reduce((a, b) => a + b, 0);
+  return { n, winRate: net.filter(r => r > 0).length / n, avg, gross, gsd,
+           fee: ts.reduce((a, t) => a + t.c, 0) / n, frac: ts.reduce((a, t) => a + t.f, 0) / n,
+           sd, t: sd > 0 ? avg / (sd / Math.sqrt(n)) : 0,
+           pf: neg > 0 ? pos / neg : pos > 0 ? Infinity : 0 };
+}
+
+// Two-sample t on the gross (pre-fee) means: does the filter actually pick better bars
+// than entering at random, or is the gap just sample noise?
+function filterEdge(sig, base) {
+  if (!sig || !base || sig.n < 10 || base.n < 10) return null;
+  const se = Math.sqrt(sig.gsd ** 2 / sig.n + base.gsd ** 2 / base.n);
+  const d = sig.gross - base.gross;
+  return se > 0 ? { d, t: d / se } : null;
+}
+
+let tradeBusy = false;
+async function refreshTrade() {
+  if (!state.src || !state.src.klinePage || tradeBusy) return;
+  tradeBusy = true;
+  try {
+    const cs = await deep5m();
+    if (cs.length > 400) {
+      const s = tradeSeries(cs), hits = [], all = [];
+      for (let i = 60; i < cs.length - TRADE_H - 1; i++) {
+        for (const dir of [1, -1]) {
+          const st = setupAt(cs, s, i, dir);
+          const r = bracket(cs, s, i, dir);
+          if (r != null) all.push(r);
+          if (st && st.ok && r != null) hits.push(r);
+        }
+      }
+      const st = summarize(hits), base = summarize(all);
+      // ≥40 samples, positive expectancy and a t-stat that clears ~95% confidence
+      const trust = st && st.n >= 40 && st.avg > 0 && st.t >= 2;
+      const live = cs.length - 1;
+      const cand = [1, -1].map(dir => ({ dir, st: setupAt(cs, s, live, dir) })).filter(x => x.st);
+      cand.sort((a, b) => (b.st.ok - a.st.ok)
+                          || b.st.checks.filter(c => c[1] !== false).length
+                          - a.st.checks.filter(c => c[1] !== false).length);
+      Object.assign(state, { trade: { cs, s, st, base, edge: filterEdge(st, base), trust: !!trust,
+                                      from: cs[0][0], to: cs[live][0],
+                                      live, cand: cand[0] || null,
+                                      fire: trust && cand[0] && cand[0].st.ok ? cand[0] : null } });
+      renderTrade();
+    }
+  } catch (e) { /* keep the previous sample on screen */ }
+  tradeBusy = false;
+}
+
+function renderTrade() {
+  const t = state.trade;
+  const S = $('tState'), note = $('tNote');
+  if (!t) { $('tPlan').innerHTML = ''; $('tChecks').innerHTML = ''; $('tStats').innerHTML = '';
+    S.className = 'tstate wait'; S.textContent = 'building the 5m sample…';
+    note.className = 'edge none'; note.textContent = 'Loading deep 5-minute history to measure the setup.'; return; }
+
+  const cs = t.cs, i = t.live, c = cs[i], a = t.s.atrS[i], e = c[4];
+  if (!t.cand || a == null) return;
+  const dir = t.fire ? t.fire.dir : t.cand.dir;
+  const stop = e - dir * a, tgt = e + dir * TRADE_RR * a;
+  const stopPct = (a / e) * 100;
+
+  S.className = 'tstate ' + (t.fire ? (dir > 0 ? 'long' : 'short') : t.cand.st.ok ? 'dead' : 'wait');
+  S.textContent = t.fire ? `${dir > 0 ? '▲ LONG' : '▼ SHORT'} · 5m close ${new Date(cs[i][0] + IV_MS[TRADE_IV])
+                        .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                    : t.cand.st.ok ? 'Setup met · measured edge is negative, so skip it'
+                    : 'No setup · waiting for all conditions on a closed 5m bar';
+
+  $('tPlan').innerHTML = t.fire ? [
+    ['Entry (next 5m open)', fmt(e)],
+    ['Stop · 1 ATR', `${fmt(stop)} (${stopPct.toFixed(2)}%)`],
+    ['Target · 2 ATR', `${fmt(tgt)} (${(stopPct * TRADE_RR).toFixed(2)}%)`],
+    ['Reward : risk', `${TRADE_RR} : 1`],
+    ['Notional at 1% risk', `${(0.01 / (stopPct / 100)).toFixed(1)}× equity`],
+    ['Margin lost at 10×', `${(stopPct * 10).toFixed(0)}% of margin`]
+  ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('') : '';
+
+  $('tChecks').innerHTML = t.cand.st.checks.map(([k, ok]) =>
+    `<span class="${ok === true ? 'ok' : ''}">${ok === true ? '✓' : ok === null ? '·' : '✗'} ${k}</span>`).join('');
+
+  const pc = v => v == null ? '—' : (v * 100).toFixed(1) + '%';
+  const rR = v => `${v >= 0 ? '+' : ''}${v.toFixed(2)}R`;
+  const st = t.st;
+  $('tStats').innerHTML = [
+    ['Sample', `${(t.to - t.from) / 864e5 > 1 ? ((t.to - t.from) / 864e5).toFixed(1) + ' days'
+                : Math.round((t.to - t.from) / 36e5) + ' hours'} · ${t.cs.length} bars`],
+    ['Signals fired', st ? String(st.n) : '0'],
+    ['Hit rate', st ? pc(st.winRate) : '—'],
+    ['Gross / trade', st ? `${rR(st.gross)} before fees` : '—'],
+    ['Filter vs random', st && t.edge ? `${rR(t.edge.d)} gross · t=${t.edge.t.toFixed(2)}` : '—'],
+    ['Fee drag', st ? `${st.fee.toFixed(2)}R (${pc(COST)})` : '—'],
+    ['Break-even fee', st ? (st.gross > 0 ? `${(st.gross * st.frac * 1e4).toFixed(1)} bps · you pay ${(COST * 1e4).toFixed(0)}`
+                                         : 'none — loses pre-fee') : '—'],
+    ['Net / trade', st ? `${rR(st.avg)}` : '—'],
+    ['t-stat (net)', st ? st.t.toFixed(2) : '—'],
+    ['Profit factor', st ? (Number.isFinite(st.pf) ? st.pf.toFixed(2) : '∞') : '—'],
+    ['Random entry', t.base ? `${rR(t.base.avg)} net · ${rR(t.base.gross)} gross over ${t.base.n} bars` : '—']
+  ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+
+  note.className = 'edge ' + (t.trust ? 'real' : 'none');
+  note.textContent = !st ? 'The setup has not fired once in this sample. Nothing to claim.'
+    : t.trust ? `Measured edge: ${st.n} signals at ${pc(st.winRate)} reaching 2R first, `
+        + `${rR(st.avg)} average after ${pc(COST)} round-trip fees (t=${st.t.toFixed(1)}). `
+        + `That is a statistical edge, not a guarantee on any single trade.`
+    : t.edge && t.edge.t > 2
+    ? `The filter does pick better bars: ${rR(t.edge.d)} more than entering at random (t=${t.edge.t.toFixed(1)}). `
+      + `But that is only ${(st.gross * st.frac * 1e4).toFixed(1)} bps of price and ${pc(COST)} of round-trip fees `
+      + `costs ${st.fee.toFixed(2)}R, so the net ${rR(st.avg)} is still a loss. `
+      + `Take it only if your venue charges under ${(st.gross * st.frac * 1e4).toFixed(1)} bps round trip.`
+    : `No edge: ${st.n} signals gross ${rR(st.gross)} versus ${rR(t.base ? t.base.gross : 0)} at random — `
+      + `a gap of ${t.edge ? rR(t.edge.d) : '—'} with t=${t.edge ? t.edge.t.toFixed(2) : '—'}, which is sample noise, `
+      + `not prediction. Net of ${pc(COST)} fees it is ${rR(st.avg)}. Do not take these trades.`;
+}
+
+
 const state = { src: null, candles: null, stats: null, deriv: null, sig: null, fc: null, act: null,
                 prevPrice: null, ticks: 0, flips: 0, bid: null, ask: null, msgs: 0, msgRate: 0,
                 hoverT: null, hoverY: null };
@@ -648,6 +879,7 @@ async function load() {
       recompute();
       startLive();
       feedStatus();
+      refreshTrade();
       return;
     } catch (e) { errs.push(`${s.name}: ${e.message}`); }
   }
@@ -775,8 +1007,10 @@ function stopLive() {
   pending.price = pending.kline = pending.funding = pending.oi = pending.bid = pending.ask = null;
   if (live.ws) {
     const w = live.ws; live.ws = null;
-    w.onopen = w.onerror = w.onclose = w.onmessage = null;
-    try { w.close(); } catch (e) {}
+    w.onmessage = w.onerror = w.onclose = null;
+    // closing a socket that is still handshaking logs a browser warning; let it open, then drop it
+    if (w.readyState === 0) w.onopen = () => { w.onopen = null; try { w.close(); } catch (e) {} };
+    else { w.onopen = null; try { w.close(); } catch (e) {} }
   }
 }
 
@@ -1014,7 +1248,7 @@ function drawChart() {
   ctx.textAlign = 'right'; ctx.fillText(NF0.format(volMax) + ' BTC', padL + W - 2, volTop + 10);
   ctx.textAlign = 'left';
 
-  const dense = step < 2.4;
+  const dense = step < 1.5;                      // bodies would blur into noise below ~1.5px per bar
   const cw = dense ? Math.max(1, step) : Math.max(2, Math.min(16, step * 0.68));
 
   const hIdx = state.hoverT == null ? -1 : V.findIndex(c => c[0] === state.hoverT);
@@ -1030,18 +1264,21 @@ function drawChart() {
   });
 
   if (dense) {
-    // too many bars per pixel for readable bodies: draw the hi/lo range as a band
-    ctx.strokeStyle = 'rgba(148,163,184,.28)';
-    ctx.beginPath();
+    // Too narrow for bodies: still draw real bars — a faded high→low wick with a solid
+    // open→close core, batched into four paths so 300 bars cost one stroke each.
+    const paths = { bw: new Path2D(), bb: new Path2D(), rw: new Path2D(), rb: new Path2D() };
     V.forEach((c, i) => {
-      const xx = Math.round(x(i)) + .5;
-      ctx.moveTo(xx, y(c[2])); ctx.lineTo(xx, y(c[3]));
+      const p = c[4] >= c[1] ? 'b' : 'r', xx = Math.round(x(i)) + .5;
+      paths[p + 'w'].moveTo(xx, y(c[2])); paths[p + 'w'].lineTo(xx, y(c[3]));
+      paths[p + 'b'].moveTo(xx, y(Math.max(c[1], c[4])));
+      paths[p + 'b'].lineTo(xx, y(Math.min(c[1], c[4])));
     });
-    ctx.stroke();
-    const bull = V[n - 1][4] >= V[0][1];
-    ctx.strokeStyle = bull ? '#16c784' : '#ea3943'; ctx.lineWidth = 1.6; ctx.beginPath();
-    V.forEach((c, i) => i ? ctx.lineTo(x(i), y(c[4])) : ctx.moveTo(x(i), y(c[4])));
-    ctx.stroke(); ctx.lineWidth = 1;
+    for (const [bull, wick] of [[true, true], [true, false], [false, true], [false, false]]) {
+      ctx.strokeStyle = (bull ? '#16c784' : '#ea3943');
+      ctx.globalAlpha = wick ? .5 : 1;
+      ctx.stroke(paths[(bull ? 'b' : 'r') + (wick ? 'w' : 'b')]);
+    }
+    ctx.globalAlpha = 1;
   } else {
     V.forEach((c, i) => {
       const bull = c[4] >= c[1];
@@ -1053,7 +1290,7 @@ function drawChart() {
     });
   }
 
-  // at 300 bars EMA 9 just adds noise, so drop it from the dense view
+  // at high density EMA 9 just adds noise, so drop it from the dense view
   const emas = [[e9, '#3b82f6', 2], [e21, '#f5a524', 1.8], [e50, '#a78bfa', 1.6]].filter((_, k) => !dense || k > 0);
   emas.forEach(([series, col, lw]) => {
     ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.beginPath();
@@ -1150,22 +1387,26 @@ function drawChart() {
       ['macd hist', sig.macd.hist[gi] == null ? '—' : NF2.format(sig.macd.hist[gi])],
       ['atr 14', sig.atrS[gi] == null ? '—' : NF2.format(sig.atrS[gi])]
     ];
-    const per = Math.ceil(rows.length / 2), padx = 11, lh = 15;
-    let colw = 152;                                   // shrink the columns instead of overflowing narrow charts
-    if (colw * 2 + padx * 2 - 14 > W - 6) colw = Math.max(78, Math.floor((W - 6 - padx * 2 + 14) / 2));
-    const bw = colw * 2 + padx * 2 - 14, bh = per * lh + 27;
-    const bx = xx + 14 + bw > padL + W ? Math.max(padL, xx - bw - 14) : xx + 14;
+    const padx = 11, lh = 15;
+    // a two-column box would bury the candles on short views: fall back to a compact OHLC column
+    const twoCol = 152 * 2 + padx * 2 - 14 <= W * .6;
+    const list = twoCol ? rows : rows.slice(0, 8);
+    const colw = twoCol ? 152 : Math.max(150, Math.min(190, W - 6 - padx * 2 + 14));
+    const per = Math.ceil(list.length / (twoCol ? 2 : 1));
+    const bw = colw * (twoCol ? 2 : 1) + padx * 2 - 14, bh = per * lh + 27;
+    const corner = !twoCol;
+    const bx = corner ? padL + 6 : (xx + 14 + bw > padL + W ? Math.max(padL, xx - bw - 14) : xx + 14);
     const hy = state.hoverY == null ? y(c[4]) : state.hoverY;
-    const by = Math.min(volTop + Hv - bh, Math.max(padT, hy - bh / 2));
-    ctx.fillStyle = 'rgba(16,21,34,.97)'; ctx.strokeStyle = '#394459'; ctx.lineWidth = 1;
+    const by = corner ? padT + 6 : Math.min(volTop + Hv - bh, Math.max(padT, hy - bh / 2));
+    ctx.fillStyle = corner ? 'rgba(16,21,34,.9)' : 'rgba(16,21,34,.97)'; ctx.strokeStyle = '#394459'; ctx.lineWidth = 1;
     if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 10); ctx.fill(); ctx.stroke(); }
     else { ctx.fillRect(bx, by, bw, bh); ctx.strokeRect(bx, by, bw, bh); }
     ctx.fillStyle = '#cbd5e1'; ctx.font = 'bold 10.5px system-ui';
-    ctx.fillText(head, bx + padx, by + 15);
+    ctx.fillText(twoCol ? head : head.replace(` · ${state.src.name}`, ''), bx + padx, by + 15);
     ctx.font = '10px system-ui';
     ctx.strokeStyle = '#2b3548';
     ctx.beginPath(); ctx.moveTo(bx + padx, by + 21.5); ctx.lineTo(bx + bw - padx, by + 21.5); ctx.stroke();
-    rows.forEach(([k, v], r) => {
+    list.forEach(([k, v], r) => {
       const x0 = bx + padx + Math.floor(r / per) * colw, yy = by + 35 + (r % per) * lh;
       ctx.fillStyle = '#8b93a5'; ctx.fillText(k, x0, yy);
       ctx.fillStyle = '#e5e7eb'; ctx.textAlign = 'right'; ctx.fillText(v, x0 + colw - 16, yy);
@@ -1218,7 +1459,8 @@ cvs.addEventListener('wheel', e => {
   if (!chartGeo) return;
   e.preventDefault();
   if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) panBy(Math.round(e.deltaX / chartGeo.step));
-  else zoomTo(view.tBars * Math.exp(e.deltaY * .0018), fracAt(e.offsetX));
+  // one event can never jump more than ~1.3x, so a trackpad fling can't slam into the floor
+  else zoomTo(view.tBars * Math.max(.74, Math.min(1.35, Math.exp(e.deltaY * .0018))), fracAt(e.offsetX));
 }, { passive: false });
 
 cvs.addEventListener('pointerdown', e => {
@@ -1296,6 +1538,8 @@ setInterval(() => {
 $('refresh').onclick = load;
 $('interval').onchange = load;
 window.addEventListener('beforeunload', stopLive);
+renderTrade();                       // placeholder until the first 5m sample lands
+setInterval(refreshTrade, 60000);    // a new closed 5m bar is all the card needs
 load();
 </script>
 </body>
