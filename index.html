@@ -155,14 +155,35 @@ const num = v => (v == null || v === '' || !Number.isFinite(+v)) ? null : +v;
 const $ = id => document.getElementById(id);
 const ivBybit = iv => ({ '1m': '1', '5m': '5', '15m': '15', '1h': '60', '4h': '240' })[iv];
 
-async function getJson(url) {
+async function getJson(url, ms = 20000) {
   const c = new AbortController();
-  const t = setTimeout(() => c.abort(), 8000);
+  const t = setTimeout(() => c.abort(new DOMException('timeout', 'TimeoutError')), ms);
   try {
     const r = await fetch(url, { signal: c.signal });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return await r.json();
+  } catch (e) {
+    if (e && (e.name === 'AbortError' || e.name === 'TimeoutError')) {
+      throw new Error(`timed out after ${ms / 1000}s`);
+    }
+    if (e instanceof TypeError) throw new Error('network/CORS blocked');
+    throw e;
   } finally { clearTimeout(t); }
+}
+// a failed auxiliary call must never sink the whole source
+const soft = p => p.catch(() => null);
+
+// fill 24h stats from candles when the ticker endpoint is unavailable
+function statsFrom(t, candles) {
+  const lastBar = candles[candles.length - 1], close = lastBar[4];
+  const day = candles.filter(c => c[0] >= lastBar[0] - 86400000);
+  const first = day.length > 1 ? day[0][1] : candles[0][1];
+  return {
+    price: num(t && t.price) ?? close,
+    chg: num(t && t.chg) ?? ((close - first) / first) * 100,
+    hi: num(t && t.hi) ?? Math.max(...candles.map(c => c[2])),
+    lo: num(t && t.lo) ?? Math.min(...candles.map(c => c[3]))
+  };
 }
 
 // candle tuple: [openTime, open, high, low, close, baseVol, takerBuyBaseVol|null]
@@ -172,23 +193,25 @@ const SOURCES = [
     async history(iv) {
       const [k, t, px, oi, oih] = await Promise.all([
         getJson(`https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=${iv}&limit=${LIMIT}`),
-        getJson('https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=BTCUSDT'),
-        getJson('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT'),
-        getJson('https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT'),
-        getJson('https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=5m&limit=13').catch(() => [])
+        soft(getJson('https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=BTCUSDT')),
+        soft(getJson('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT')),
+        soft(getJson('https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT')),
+        soft(getJson('https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=5m&limit=13'))
       ]);
+      const candles = k.map(x => [+x[0], +x[1], +x[2], +x[3], +x[4], +x[5], +x[9]]);
       return {
-        candles: k.map(x => [+x[0], +x[1], +x[2], +x[3], +x[4], +x[5], +x[9]]),
-        stats: { price: +t.lastPrice, chg: +t.priceChangePercent, hi: +t.highPrice, lo: +t.lowPrice },
+        candles,
+        stats: statsFrom(t && { price: +t.lastPrice, chg: +t.priceChangePercent, hi: +t.highPrice, lo: +t.lowPrice }, candles),
         deriv: {
-          funding: num(px.lastFundingRate), fundingTime: num(px.nextFundingTime), mark: num(px.markPrice),
-          oi: num(oi.openInterest),
+          funding: px ? num(px.lastFundingRate) : null, fundingTime: px ? num(px.nextFundingTime) : null,
+          mark: px ? num(px.markPrice) : null,
+          oi: oi ? num(oi.openInterest) : null,
           oiHist: (oih || []).map(h => ({ t: +h.timestamp, oi: +h.sumOpenInterest }))
         }
       };
     },
     async poll(iv) {
-      const k = await getJson(`https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=${iv}&limit=1`);
+      const k = await getJson(`https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=${iv}&limit=1`, 8000);
       const c = k[0];
       return { kline: { t: +c[0], o: +c[1], h: +c[2], l: +c[3], c: +c[4], v: +c[5], tb: +c[9] } };
     },
@@ -213,22 +236,24 @@ const SOURCES = [
       const b = ivBybit(iv);
       const [k, t, oih] = await Promise.all([
         getJson(`https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT&interval=${b}&limit=${LIMIT}`),
-        getJson('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT'),
-        getJson(`https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=5min&limit=13`).catch(() => null)
+        soft(getJson('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT')),
+        soft(getJson(`https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=5min&limit=13`))
       ]);
-      const tk = t.result.list[0];
+      const tk = t && t.result && t.result.list[0];
+      const candles = k.result.list.slice().reverse().map(x => [+x[0], +x[1], +x[2], +x[3], +x[4], +x[5], null]);
       return {
-        candles: k.result.list.slice().reverse().map(x => [+x[0], +x[1], +x[2], +x[3], +x[4], +x[5], null]),
-        stats: { price: +tk.lastPrice, chg: +tk.price24hPcnt * 100, hi: +tk.highPrice24h, lo: +tk.lowPrice24h },
+        candles,
+        stats: statsFrom(tk && { price: +tk.lastPrice, chg: +tk.price24hPcnt * 100, hi: +tk.highPrice24h, lo: +tk.lowPrice24h }, candles),
         deriv: {
-          funding: num(tk.fundingRate), fundingTime: num(tk.nextFundingTime), mark: num(tk.markPrice) || num(tk.lastPrice),
-          oi: num(tk.openInterest),
+          funding: tk ? num(tk.fundingRate) : null, fundingTime: tk ? num(tk.nextFundingTime) : null,
+          mark: tk ? num(tk.markPrice) : null,
+          oi: tk ? num(tk.openInterest) : null,
           oiHist: oih ? oih.result.list.slice().reverse().map(h => ({ t: +h.timestamp, oi: +h.openInterest })) : []
         }
       };
     },
     async poll(iv) {
-      const k = await getJson(`https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT&interval=${ivBybit(iv)}&limit=1`);
+      const k = await getJson(`https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT&interval=${ivBybit(iv)}&limit=1`, 8000);
       const c = k.result.list[0];
       return { kline: { t: +c[0], o: +c[1], h: +c[2], l: +c[3], c: +c[4], v: +c[5], tb: null } };
     },
@@ -255,23 +280,24 @@ const SOURCES = [
     async history(iv) {
       const [k, t, oi, fr, mk] = await Promise.all([
         getJson(`https://www.okx.com/api/v5/market/candles?instId=BTC-USDT-SWAP&bar=${iv}&limit=300`),
-        getJson('https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT-SWAP'),
-        getJson('https://www.okx.com/api/v5/public/open-interest?instType=SWAP&instId=BTC-USDT-SWAP').catch(() => null),
-        getJson('https://www.okx.com/api/v5/public/funding-rate?instType=SWAP&instId=BTC-USDT-SWAP').catch(() => null),
-        getJson('https://www.okx.com/api/v5/public/mark-price?instType=SWAP&instId=BTC-USDT-SWAP').catch(() => null)
+        soft(getJson('https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT-SWAP')),
+        soft(getJson('https://www.okx.com/api/v5/public/open-interest?instType=SWAP&instId=BTC-USDT-SWAP')),
+        soft(getJson('https://www.okx.com/api/v5/public/funding-rate?instType=SWAP&instId=BTC-USDT-SWAP')),
+        soft(getJson('https://www.okx.com/api/v5/public/mark-price?instType=SWAP&instId=BTC-USDT-SWAP'))
       ]);
-      const tk = t.data[0], f = fr && fr.data[0];
+      const tk = t && t.data[0], f = fr && fr.data[0];
+      const candles = k.data.slice().reverse().map(x => [+x[0], +x[1], +x[2], +x[3], +x[4], +x[5], null]);
       return {
-        candles: k.data.slice().reverse().map(x => [+x[0], +x[1], +x[2], +x[3], +x[4], +x[5], null]),
-        stats: { price: +tk.last, chg: ((+tk.last - +tk.open24h) / +tk.open24h) * 100, hi: +tk.high24h, lo: +tk.low24h },
+        candles,
+        stats: statsFrom(tk && { price: +tk.last, chg: ((+tk.last - +tk.open24h) / +tk.open24h) * 100, hi: +tk.high24h, lo: +tk.low24h }, candles),
         // oiCcy is base-coin OI; `oi` from this endpoint is contract count (0.01 BTC each)
-        deriv: { funding: num(f && f.fundingRate), fundingTime: num(f && f.nextFundingTime),
-                 mark: mk ? num(mk.data[0].markPx) : num(tk.last),
+        deriv: { funding: f ? num(f.fundingRate) : null, fundingTime: f ? num(f.nextFundingTime) : null,
+                 mark: mk ? num(mk.data[0].markPx) : null,
                  oi: oi ? num(oi.data[0].oiCcy) : null, oiHist: [] }
       };
     },
     async poll(iv) {
-      const k = await getJson(`https://www.okx.com/api/v5/market/candles?instId=BTC-USDT-SWAP&bar=${iv}&limit=1`);
+      const k = await getJson(`https://www.okx.com/api/v5/market/candles?instId=BTC-USDT-SWAP&bar=${iv}&limit=1`, 8000);
       const c = k.data[0];
       return { kline: { t: +c[0], o: +c[1], h: +c[2], l: +c[3], c: +c[4], v: +c[5], tb: null } };
     }
@@ -438,7 +464,7 @@ const fmt = n => n == null ? '—' : n.toLocaleString('en-US', { minimumFraction
 
 const state = { src: null, candles: null, stats: null, deriv: null, sig: null, fc: null, act: null,
                 prevPrice: null, ticks: 0, flips: 0, bid: null, ask: null, msgs: 0, msgRate: 0 };
-const live = { ws: null, timer: null, slow: null, render: null, watchdog: null, mode: '', lastFlush: 0 };
+const live = { ws: null, timer: null, slow: null, render: null, watchdog: null, retry: null, mode: '', lastFlush: 0 };
 const pending = { price: null, kline: null, funding: null, oi: null, bid: null, ask: null };
 const iv = () => $('interval').value;
 function setStatus(t, led) { $('status').textContent = t; $('led').className = 'led ' + (led || ''); }
@@ -446,7 +472,7 @@ function setStatus(t, led) { $('status').textContent = t; $('led').className = '
 async function load() {
   stopLive();
   setStatus(`fetching ${iv()} futures history…`, 'slow');
-  let err = '';
+  const errs = [];
   for (const s of SOURCES) {
     try {
       const { candles, stats, deriv } = await s.history(iv());
@@ -456,9 +482,11 @@ async function load() {
       recompute();
       startLive();
       return;
-    } catch (e) { err += `${s.name}: ${e.message} · `; }
+    } catch (e) { errs.push(`${s.name}: ${e.message}`); }
   }
-  setStatus(`all futures endpoints failed — ${err}`);
+  setStatus(`all ${iv()} futures calls failed — ${errs.join(' · ')} · ${
+    state.candles ? 'showing last good data, retrying in 15s' : 'retrying in 10s'}`);
+  live.retry = setTimeout(load, state.candles ? 15000 : 10000);
 }
 
 function recompute() {
@@ -551,8 +579,9 @@ async function slowTick() {
   } catch (e) {}
 }
 function stopLive() {
-  clearInterval(live.timer); clearInterval(live.slow); clearInterval(live.render); clearTimeout(live.watchdog);
-  live.timer = live.slow = live.render = live.watchdog = null; live.mode = '';
+  clearInterval(live.timer); clearInterval(live.slow); clearInterval(live.render);
+  clearTimeout(live.watchdog); clearTimeout(live.retry);
+  live.timer = live.slow = live.render = live.watchdog = live.retry = null; live.mode = '';
   pending.price = pending.kline = pending.funding = pending.oi = pending.bid = pending.ask = null;
   if (live.ws) {
     const w = live.ws; live.ws = null;
