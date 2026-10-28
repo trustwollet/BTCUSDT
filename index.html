@@ -862,10 +862,14 @@ const pending = { price: null, kline: null, funding: null, oi: null, bid: null, 
 const iv = () => $('interval').value;
 function setStatus(t, led) { $('status').textContent = t; $('led').className = 'led ' + (led || ''); }
 
+let loading = false;
 async function load() {
+  if (loading) return;                       // a slow source must not stack a second teardown
+  loading = true;
   stopLive();
   setStatus(`fetching ${iv()} futures history…`, 'slow');
   const errs = [];
+  try {
   for (const s of SOURCES) {
     try {
       const { candles, stats, deriv } = await s.history(iv());
@@ -886,6 +890,7 @@ async function load() {
   setStatus(`all ${iv()} futures calls failed — ${errs.join(' · ')} · ${
     state.candles ? 'showing last good data, retrying in 15s' : 'retrying in 10s'}`);
   live.retry = setTimeout(load, state.candles ? 15000 : 10000);
+  } finally { loading = false; }
 }
 
 function recompute() {
@@ -1540,6 +1545,10 @@ $('interval').onchange = load;
 window.addEventListener('beforeunload', stopLive);
 renderTrade();                       // placeholder until the first 5m sample lands
 setInterval(refreshTrade, 60000);    // a new closed 5m bar is all the card needs
+// Every minute, re-run the whole page-load path — history, 24h stats, derivatives, forecast and
+// the 5m trade sample. Runs in the background too; held back mid-drag and while the user is
+// reading history they have panned away from, so a refresh never yanks the chart out from under them.
+setInterval(() => { if (!drag && view.anchorT == null) load(); }, 60000);
 load();
 </script>
 </body>
