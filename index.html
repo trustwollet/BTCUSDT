@@ -7,15 +7,18 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   :root {
-    --bg: #0a0e17; --panel: #121725; --line: #1f2937;
-    --txt: #e5e7eb; --dim: #9ca3af;
-    --up: #16c784; --down: #ea3943; --flat: #f5a524;
+    --bg: #080b12; --panel: #121725; --panel2: #161c2c; --line: #1f2937; --line2: #2b3548;
+    --txt: #e5e7eb; --dim: #9ca3af; --dim2: #6b7280;
+    --up: #16c784; --down: #ea3943; --flat: #f5a524; --accent: #4f7dff;
+    --radius: 16px; --shadow: 0 18px 40px -24px rgba(0,0,0,.9);
   }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--bg); color: var(--txt); min-height: 100vh; padding: 20px;
+    background: radial-gradient(1100px 520px at 18% -12%, #131b2e 0%, var(--bg) 62%);
+    color: var(--txt); min-height: 100vh; padding: clamp(12px, 2.4vw, 26px);
+    -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1180px; margin: 0 auto; }
+  .wrap { max-width: 1240px; margin: 0 auto; }
   .topbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .symbol { font-size: 20px; font-weight: 700; letter-spacing: .3px; }
   .tag { font-size: 10px; font-weight: 700; letter-spacing: .6px; color: var(--dim);
@@ -27,26 +30,53 @@
   .neg { color: var(--down); background: rgba(234,57,67,.12); }
   .spacer { flex: 1; }
   select, button {
-    background: var(--panel); color: var(--txt); border: 1px solid var(--line);
-    border-radius: 9px; padding: 8px 12px; font-size: 13px; cursor: pointer;
+    background: var(--panel2); color: var(--txt); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 12px; font-size: 13px; cursor: pointer;
+    transition: border-color .18s, background .18s, transform .12s;
+  }
+  select:hover, button:hover { border-color: var(--line2); background: #1b2233; }
+  button:active { transform: translateY(1px); }
+  select:focus-visible, button:focus-visible, canvas:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
   }
   .status { font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 7px; }
   .led { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; }
   .led.on { background: var(--up); box-shadow: 0 0 9px var(--up); animation: blink 1s infinite; }
   .led.slow { background: var(--flat); box-shadow: 0 0 9px var(--flat); }
   @keyframes blink { 50% { opacity: .3 } }
-  .grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; margin-top: 14px; }
-  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .grid { display: grid; grid-template-columns: 360px 1fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
   .col { display: flex; flex-direction: column; gap: 16px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
-  .signal { text-align: center; padding: 24px 16px; }
-  .badge {
-    display: inline-flex; align-items: center; gap: 10px; font-size: 33px; font-weight: 800;
-    letter-spacing: 1px; padding: 13px 24px; border-radius: 16px; transition: all .3s;
-  }
-  .badge.up   { color: var(--up);   background: rgba(22,199,132,.12); box-shadow: 0 0 32px rgba(22,199,132,.18) inset; }
-  .badge.down { color: var(--down); background: rgba(234,57,67,.12);  box-shadow: 0 0 32px rgba(234,57,67,.18) inset; }
-  .badge.flat { color: var(--flat); background: rgba(245,165,36,.12); box-shadow: 0 0 32px rgba(245,165,36,.15) inset; }
+  .card { background: linear-gradient(180deg, var(--panel2), var(--panel) 60%);
+          border: 1px solid var(--line); border-radius: var(--radius); padding: 18px;
+          box-shadow: var(--shadow); }
+  .signal { text-align: center; padding: 22px 16px 18px; }
+
+  /* prediction emblem */
+  .emb { --c: var(--flat); --glow: rgba(245,165,36,.5); display: flex; flex-direction: column; align-items: center; }
+  .emb.buy  { --c: var(--up);   --glow: rgba(22,199,132,.6); }
+  .emb.sell { --c: var(--down); --glow: rgba(234,57,67,.6); }
+  .emb.hold { --c: var(--flat); --glow: rgba(245,165,36,.5); }
+  .emb-wrap { position: relative; width: 150px; height: 150px; }
+  .emb-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  .ring-track { fill: none; stroke: #1a2131; stroke-width: 5; }
+  .ring-val { fill: none; stroke: var(--c); stroke-width: 5; stroke-linecap: round;
+              transform: rotate(-90deg); transform-origin: 66px 66px;
+              transition: stroke-dashoffset .8s cubic-bezier(.22,1,.36,1), stroke .4s;
+              filter: drop-shadow(0 0 7px var(--glow)); }
+  .orbit { fill: none; stroke: var(--c); stroke-width: 1; stroke-dasharray: 2 8; opacity: .45;
+           transform-origin: 66px 66px; animation: spin 16s linear infinite; }
+  .glyph { fill: var(--c); transition: fill .4s; filter: drop-shadow(0 0 6px var(--glow)); }
+  .shield { fill: url(#shieldFill); stroke: var(--c); stroke-width: 1.3; transition: stroke .4s; }
+  .glowdisk { fill: var(--c); opacity: .12; transition: opacity .5s; }
+  .tick { stroke: var(--line2); stroke-width: 1.4; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .call { font-size: 31px; font-weight: 800; letter-spacing: 2.5px; color: var(--c);
+          line-height: 1.05; margin-top: 2px; transition: color .4s; }
+  .conf { font-size: 11.5px; color: var(--dim); letter-spacing: .5px; margin-top: 3px; }
+  .conf b { color: var(--txt); font-weight: 700; }
+  .emb.flip .emb-wrap { animation: pop .55s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes pop { 0% { transform: scale(.85); opacity: .35 } 100% { transform: scale(1); opacity: 1 } }
   .strength { height: 7px; border-radius: 6px; background: #1a1f2e; margin: 16px 0 6px; overflow: hidden; }
   .strength > i { display: block; height: 100%; width: 0; transition: width .4s; }
   .meta { font-size: 12px; color: var(--dim); }
@@ -58,9 +88,23 @@
   .bar::before { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: #2b3548; }
   .bar > i { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
   h3 { font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--dim); }
-  .chart-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
-  canvas { width: 100%; display: block; border-radius: 10px; }
-  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; font-size: 11px; color: var(--dim); }
+  .chart-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .chart-head h3 { flex-shrink: 0; }
+  #ohlc { font-variant-numeric: tabular-nums; }
+  .cd { height: 2px; border-radius: 2px; background: #1a2131; overflow: hidden; margin: 6px 0 12px; }
+  .cd > i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--accent), #6ee7b7);
+            transform-origin: left; transform: scaleX(0); }
+  .ctools { display: flex; align-items: center; gap: 6px; }
+  .ctools button { min-width: 34px; padding: 6px 10px; font-size: 14px; line-height: 1;
+                   display: inline-flex; align-items: center; justify-content: center; }
+  .ctools .wide { font-size: 11.5px; font-weight: 700; letter-spacing: .4px; padding: 7px 11px; }
+  .ctools .live.on { color: var(--up); border-color: rgba(22,199,132,.45); background: rgba(22,199,132,.1); }
+  .readout { font-size: 11.5px; color: var(--dim); min-width: 92px; text-align: center;
+             font-variant-numeric: tabular-nums; }
+  canvas { width: 100%; display: block; border-radius: 10px; cursor: crosshair;
+           touch-action: none; background: rgba(8,11,18,.55); }
+  canvas.grabbing { cursor: grabbing; }
+  .legend { display: flex; gap: 14px 16px; flex-wrap: wrap; margin-top: 10px; font-size: 11px; color: var(--dim); }
   .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
   .kv { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; font-size: 12.5px; margin-top: 12px; }
   .kv span:nth-child(odd) { color: var(--dim); }
@@ -75,6 +119,15 @@
   .edge { margin-top: 11px; font-size: 11.5px; line-height: 1.5; padding: 9px 11px; border-radius: 9px; }
   .edge.real { background: rgba(22,199,132,.09); border: 1px solid rgba(22,199,132,.28); color: var(--up); }
   .edge.none { background: rgba(245,165,36,.09); border: 1px solid rgba(245,165,36,.28); color: var(--flat); }
+  @media (max-width: 640px) {
+    .topbar { gap: 10px; } .symbol { font-size: 17px; } .price { font-size: 22px; }
+    .card { padding: 14px; border-radius: 14px; } .ctools button { min-width: 30px; padding: 5px 8px; }
+    .readout { min-width: 74px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+                             transition-duration: .01ms !important; }
+  }
 </style>
 </head>
 <body>
@@ -99,7 +152,28 @@
   <div class="grid">
     <div class="col">
       <div class="card signal">
-        <div class="badge flat" id="badge">—</div>
+        <div class="emb hold" id="emb">
+          <div class="emb-wrap">
+            <svg class="emb-svg" viewBox="0 0 132 132" aria-hidden="true">
+              <defs>
+                <linearGradient id="shieldFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#1e2739" />
+                  <stop offset="1" stop-color="#0f1420" />
+                </linearGradient>
+              </defs>
+              <circle class="ring-track" cx="66" cy="66" r="58" />
+              <circle class="orbit" cx="66" cy="66" r="48" />
+              <circle class="glowdisk" cx="66" cy="66" r="30" />
+              <path class="shield" d="M66 28 L98.9 47 L98.9 85 L66 104 L33.1 85 L33.1 47 Z" />
+              <path class="tick" d="M66 22 v-4 M110 66 h4 M66 110 v4 M22 66 h-4" />
+              <circle class="ring-val" id="ring" cx="66" cy="66" r="58"
+                      stroke-dasharray="364.42" stroke-dashoffset="364.42" />
+              <path class="glyph" id="glyph" d="M66 46 L82 68 H72 V84 H60 V68 H50 Z" />
+            </svg>
+          </div>
+          <div class="call" id="call">—</div>
+          <div class="conf" id="conf">waiting for data</div>
+        </div>
         <div class="strength"><i id="strbar"></i></div>
         <div class="meta" id="verdict">waiting for data</div>
         <div class="rows" id="rows"></div>
@@ -124,14 +198,28 @@
         <div class="chart-head">
           <h3>Price + EMA</h3>
           <div class="meta" id="ohlc"></div>
+          <div class="spacer"></div>
+          <div class="ctools">
+            <button id="zOut" title="Zoom out (minus key)" aria-label="Zoom out">&minus;</button>
+            <span class="readout" id="barCount">120 bars</span>
+            <button id="zIn" title="Zoom in (plus key)" aria-label="Zoom in">+</button>
+            <button id="pLeft" title="Older bars (left arrow)" aria-label="Pan to older bars">&#8249;</button>
+            <button id="pRight" title="Newer bars (right arrow)" aria-label="Pan to newer bars">&#8250;</button>
+            <button id="fitBtn" class="wide" title="Fit all loaded bars">FIT</button>
+            <button id="liveBtn" class="wide live on" title="Follow the live candle (Home key)">&#9679; LIVE</button>
+          </div>
         </div>
-        <canvas id="chart" height="380"></canvas>
+        <div class="cd"><i id="cdBar"></i></div>
+        <canvas id="chart" height="420" tabindex="0"
+                aria-label="BTCUSDT perpetual futures candlestick chart with EMAs, volume and forecast cone"></canvas>
         <div class="legend">
           <span><span class="dot" style="background:#3b82f6"></span>EMA 9</span>
           <span><span class="dot" style="background:#f5a524"></span>EMA 21</span>
           <span><span class="dot" style="background:#a78bfa"></span>EMA 50</span>
           <span><span class="dot" style="background:var(--up)"></span>EMA flip up</span>
           <span><span class="dot" style="background:var(--down)"></span>EMA flip down</span>
+          <span><span class="dot" style="background:#4b5563"></span>Volume</span>
+          <span>Scroll = zoom &middot; drag = pan &middot; hover = bar detail &middot; double-click = reset</span>
         </div>
         <div class="rows" id="indRows" style="margin-top:18px"></div>
       </div>
@@ -154,6 +242,75 @@ const clamp = (v, s) => Math.max(-1, Math.min(1, v / s));
 const num = v => (v == null || v === '' || !Number.isFinite(+v)) ? null : +v;
 const $ = id => document.getElementById(id);
 const ivBybit = iv => ({ '1m': '1', '5m': '5', '15m': '15', '1h': '60', '4h': '240' })[iv];
+
+// ---- chart viewport -------------------------------------------------------
+// `bars` = how many candles are visible, `off` = how many are hidden to the right
+// of them (0 = pinned to the live candle). Both ease toward their targets.
+const MIN_BARS = 25;
+const RING_C = 2 * Math.PI * 58;                       // emblem confidence ring circumference
+const GLYPH = {
+  buy:  'M66 42 L85 68 H74 V88 H58 V68 H47 Z',
+  sell: 'M66 90 L85 64 H74 V44 H58 V64 H47 Z',
+  hold: 'M66 44 L86 66 L66 88 L46 66 Z'
+};
+const view = { bars: 120, tBars: 120, off: 0, anchorT: null, dom: null, raf: 0, domRaf: 0 };
+
+const totalBars = () => (state.candles ? state.candles.length : LIMIT);
+function offFromAnchor() {
+  if (view.anchorT == null || !state.candles) return 0;
+  const cs = state.candles;
+  for (let i = cs.length - 1; i >= 0; i--) if (cs[i][0] === view.anchorT) return cs.length - 1 - i;
+  view.anchorT = null;                       // anchor aged out of the rolling buffer
+  return 0;
+}
+function clampOff(o) { return Math.max(0, Math.min(Math.max(0, totalBars() - Math.round(view.tBars)), o)); }
+function anchorAt(off) {
+  const i = totalBars() - 1 - off;
+  view.anchorT = off <= 0 || i < 0 || !state.candles ? null : state.candles[i][0];
+}
+function animateView() { if (!view.raf) view.raf = requestAnimationFrame(stepView); }
+function stepView() {
+  view.raf = 0;
+  const tOff = clampOff(offFromAnchor());
+  const eb = view.tBars - view.bars, eo = tOff - view.off;
+  if (Math.abs(eb) < .4 && Math.abs(eo) < .4) {
+    view.bars = view.tBars; view.off = tOff;
+    redraw(); syncLiveBtn(); return;
+  }
+  view.bars += eb * .3; view.off += eo * .3;
+  redraw();
+  view.raf = requestAnimationFrame(stepView);
+}
+// u = 0 pins the left edge, u = 1 pins the live/right edge
+function zoomTo(target, u = 1) {
+  const total = totalBars();
+  if (!Number.isFinite(target)) return;
+  const bars = Math.max(MIN_BARS, Math.min(total, Math.round(target)));
+  const cur = Math.max(MIN_BARS, Math.min(total, Math.round(view.bars)));
+  const start = total - Math.round(view.off) - cur;
+  const cursor = start + u * cur;
+  let ns = Math.round(cursor - u * bars);
+  ns = Math.max(0, Math.min(total - bars, ns));
+  const off = total - bars - ns;
+  view.tBars = bars; anchorAt(off);
+  animateView(); syncLiveBtn();
+}
+function panTo(off, immediate) {
+  if (!Number.isFinite(off)) return;
+  const o = clampOff(Math.round(off));
+  anchorAt(o);
+  if (immediate) { view.off = o; redraw(); } else animateView();
+  syncLiveBtn();
+}
+function panBy(d) { panTo(Math.round(view.off) + d); }
+function goLive() { view.anchorT = null; animateView(); syncLiveBtn(); }
+function resetView(bars) { view.tBars = Math.min(bars || 120, totalBars()); goLive(); }
+function syncLiveBtn() {
+  const b = $('liveBtn'); if (!b) return;
+  const on = clampOff(offFromAnchor()) === 0;
+  b.classList.toggle('on', on);
+  b.textContent = on ? '● LIVE' : '▶ GO LIVE';
+}
 
 async function getJson(url, ms = 20000) {
   const c = new AbortController();
@@ -460,11 +617,16 @@ function forecast(candles, s, h) {
   };
 }
 
-const fmt = n => n == null ? '—' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Intl formatters are expensive to construct, so build them once and reuse in the draw loop
+const NF2 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const NF0 = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+const fmt = n => n == null ? '—' : NF2.format(n);
 
 const state = { src: null, candles: null, stats: null, deriv: null, sig: null, fc: null, act: null,
-                prevPrice: null, ticks: 0, flips: 0, bid: null, ask: null, msgs: 0, msgRate: 0 };
-const live = { ws: null, timer: null, slow: null, render: null, watchdog: null, retry: null, mode: '', lastFlush: 0 };
+                prevPrice: null, ticks: 0, flips: 0, bid: null, ask: null, msgs: 0, msgRate: 0,
+                hoverT: null, hoverY: null };
+const live = { ws: null, timer: null, slow: null, render: null, watchdog: null, retry: null, mode: '',
+               lastFlush: 0, beatAt: 0, lastKline: 0, topUp: false };
 const pending = { price: null, kline: null, funding: null, oi: null, bid: null, ask: null };
 const iv = () => $('interval').value;
 function setStatus(t, led) { $('status').textContent = t; $('led').className = 'led ' + (led || ''); }
@@ -478,9 +640,14 @@ async function load() {
       const { candles, stats, deriv } = await s.history(iv());
       if (!candles || candles.length < 60) throw new Error('too few candles');
       Object.assign(state, { src: s, candles, stats, deriv, prevPrice: null,
-                             ticks: 0, flips: 0, msgs: 0, tickBase: 0, msgRate: 0 });
+                             ticks: 0, flips: 0, msgs: 0, tickBase: 0, msgRate: 0,
+                             hoverT: null, hoverY: null });
+      view.tBars = Math.min(view.tBars, candles.length);
+      view.bars = view.tBars; view.off = 0; view.anchorT = null; view.dom = null;
+      syncLiveBtn();
       recompute();
       startLive();
+      feedStatus();
       return;
     } catch (e) { errs.push(`${s.name}: ${e.message}`); }
   }
@@ -507,18 +674,21 @@ function onTick(u) {
   if (u.oi != null) pending.oi = u.oi;
 }
 
-// Feed messages arrive many times per second; recompute + repaint at most once per second.
+// Feed messages arrive many times per second; the loop below coalesces them into one repaint.
 function flush() {
   if (pending.price == null && !pending.kline && pending.bid == null && pending.funding == null && pending.oi == null) return;
+  const now = Date.now();
   const { stats, deriv } = state;
+  const hadPrice = pending.price != null;
   if (pending.bid != null) { state.bid = pending.bid; state.ask = pending.ask; pending.bid = pending.ask = null; }
-  if (pending.price != null) { state.prevPrice = stats.price; stats.price = pending.price; pending.price = null; }
+  if (hadPrice) { state.prevPrice = stats.price; stats.price = pending.price; pending.price = null; }
   if (pending.kline) {
     const k = pending.kline, cs = state.candles, cur = cs[cs.length - 1];
     const row = [k.t, k.o, k.h, k.l, k.c, k.v, k.tb != null ? k.tb : cur[6]];
     if (k.t > cur[0]) { cs.push(row); if (cs.length > LIMIT) cs.shift(); }
     else if (k.t === cur[0]) cs[cs.length - 1] = row;
-    if (!stats.price) stats.price = k.c;
+    if (!hadPrice) stats.price = k.c;              // candle-only feeds must still move the header
+    live.lastKline = now;
     pending.kline = null;
   }
   if (pending.funding != null || pending.oi != null) {
@@ -528,23 +698,41 @@ function flush() {
     });
     pending.funding = pending.oi = null;
   }
-  const now = Date.now();
   const secs = Math.max(0.001, (now - (live.lastFlush || now - RENDER_MS)) / 1000);
   state.msgRate = +((state.msgs - (state.tickBase || 0)) / secs).toFixed(1);
   state.tickBase = state.msgs;
-  live.lastFlush = now;
+  live.lastFlush = live.beatAt = now;
   state.ticks++;
   recompute();
-  setStatus(`${state.src.name} · ${live.mode} · ${iv()} · ${state.msgRate} msg/s · tick ${state.ticks}`,
-            live.ws ? 'on' : 'slow');
+  feedStatus();
+}
+// shown immediately after a reload, before the first tick has a chance to arrive
+function feedStatus() {
+  setStatus(`${state.src.name} · ${live.mode}${live.ws ? '' : ' · connecting…'} · ${iv()}`
+            + ` · ${state.msgRate} msg/s · tick ${state.ticks}`, live.ws ? 'on' : 'slow');
+}
+// The 5s loop has to keep turning even when the feed goes quiet: repaint the chart, and
+// if the websocket hasn't handed us a candle for a whole beat, top the last one up from REST.
+function beat() {
+  live.beatAt = Date.now();
+  if (pending.price != null || pending.kline || pending.bid != null || pending.funding != null || pending.oi != null) {
+    flush(); return;
+  }
+  if (!live.topUp && !live.timer && state.src.poll && live.beatAt - live.lastKline > RENDER_MS * .9) {
+    live.topUp = true;
+    state.src.poll(iv()).then(u => { live.topUp = false; onTick(u); flush(); },
+                            () => { live.topUp = false; });
+  }
+  redraw();
 }
 
 function startLive() {
   if (state.src.stream) { live.mode = 'websocket'; connect(); }
   else { live.mode = `rest ${RENDER_MS / 1000}s`; live.timer = setInterval(pollTick, RENDER_MS); pollTick(); }
-  live.render = setInterval(flush, RENDER_MS);
+  live.render = setInterval(beat, RENDER_MS);
   live.slow = setInterval(slowTick, 20000);
-  live.lastFlush = Date.now();
+  live.lastFlush = live.beatAt = live.lastKline = Date.now();
+  live.topUp = false;
 }
 function connect() {
   try { live.ws = state.src.stream(iv(), onTick); }
@@ -571,6 +759,7 @@ async function pollTick() {
   catch (e) { setStatus(`feed error: ${e.message} · retrying`, 'slow'); }
 }
 async function slowTick() {
+  if (document.hidden) return;
   try {
     const { stats, deriv } = await state.src.history(iv());
     state.deriv = deriv;
@@ -580,6 +769,7 @@ async function slowTick() {
 }
 function stopLive() {
   clearInterval(live.timer); clearInterval(live.slow); clearInterval(live.render);
+  live.topUp = true;                       // swallow any in-flight beat response until the next startLive
   clearTimeout(live.watchdog); clearTimeout(live.retry);
   live.timer = live.slow = live.render = live.watchdog = live.retry = null; live.mode = '';
   pending.price = pending.kline = pending.funding = pending.oi = pending.bid = pending.ask = null;
@@ -606,12 +796,23 @@ function render() {
   // The actionable call comes from the forecast probability, not the raw composite.
   const prob = fc ? fc.p : Math.max(0, Math.min(1, 0.5 + sig.score * 0.25));
   const act = prob >= 0.55 ? 'BUY' : prob <= 0.45 ? 'SELL' : 'HOLD';
-  const b = $('badge');
-  b.className = 'badge ' + (act === 'BUY' ? 'up' : act === 'SELL' ? 'down' : 'flat');
-  b.textContent = (act === 'BUY' ? '▲ BUY' : act === 'SELL' ? '▼ SELL' : '◆ HOLD');
+  const conf = Math.min(1, Math.abs(prob - 0.5) / 0.2);
+
+  const emb = $('emb');
+  const cls = 'emb ' + act.toLowerCase();
+  if (state.act !== act) {
+    emb.className = cls + ' flip';
+    clearTimeout(emb._t);
+    emb._t = setTimeout(() => emb.classList.remove('flip'), 650);
+  } else emb.className = cls;
+  $('call').textContent = act;
+  $('glyph').setAttribute('d', GLYPH[act.toLowerCase()]);
+  $('ring').setAttribute('stroke-dashoffset', (RING_C * (1 - conf)).toFixed(2));
+  $('conf').innerHTML = `<b>${(conf * 100).toFixed(0)}%</b> conviction · `
+    + (fc ? `${fc.m} similar bars` : 'no backtest yet');
 
   const bar = $('strbar');
-  bar.style.width = Math.min(1, Math.abs(prob - 0.5) / 0.2) * 100 + '%';
+  bar.style.width = conf * 100 + '%';
   bar.style.background = act === 'BUY' ? 'var(--up)' : act === 'SELL' ? 'var(--down)' : 'var(--flat)';
 
   $('verdict').innerHTML = `${(prob * 100).toFixed(0)}% odds up · next ${FC_H} × ${iv()}`
@@ -686,8 +887,8 @@ function render() {
     const dirNow = sig.score > 0.2 ? 'UP' : sig.score < -0.2 ? 'DOWN' : 'SIDEWAYS';
     e.textContent = fc.real
       ? (fc.role === 'reversal'
-        ? `Reversal regime: the badge reads ${dirNow}, yet ${fc.m} comparable bars closed up ${pc(fc.emp)} of the time against a ${pc(fc.base)} base rate — on ${iv()} this signal has historically been a fade-the-move cue, not a continuation cue.`
-        : `Continuation regime: the badge reads ${dirNow} and ${fc.m} comparable bars agreed with it ${pc(fc.emp)} of the time against a ${pc(fc.base)} base rate on ${iv()}.`)
+        ? `Reversal regime: the signal reads ${dirNow}, yet ${fc.m} comparable bars closed up ${pc(fc.emp)} of the time against a ${pc(fc.base)} base rate — on ${iv()} this signal has historically been a fade-the-move cue, not a continuation cue.`
+        : `Continuation regime: the signal reads ${dirNow} and ${fc.m} comparable bars agreed with it ${pc(fc.emp)} of the time against a ${pc(fc.base)} base rate on ${iv()}.`)
       + ' Sample is small and the windows overlap, so treat it as an odds tilt, not a prediction of this bar.'
       : `No measurable edge. On ${fc.m} comparable bars price closed up ${pc(fc.emp)} against a ${pc(fc.base)} base rate — inside the ±${(fc.ci * 100).toFixed(0)} noise band at ${iv()}. This forecast is a coin flip; anyone claiming a direction here is guessing.`;
   }
@@ -695,54 +896,167 @@ function render() {
   drawChart();
 }
 
+let chartGeo = null;
+function niceStep(raw) {
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const f of [1, 2, 2.5, 5, 10]) if (f * p >= raw) return f * p;
+  return 10 * p;
+}
+
 function drawChart() {
+  if (!state.candles || document.hidden) return;
   const cv = $('chart');
-  const cssW = cv.clientWidth || 700, cssH = 380, dpr = window.devicePixelRatio || 1;
-  cv.width = cssW * dpr; cv.height = cssH * dpr; cv.style.height = cssH + 'px';
+  const cssW = cv.clientWidth || 700;
+  const cssH = Math.max(300, Math.min(540, Math.round(cssW * .62)));
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const pw = Math.round(cssW * dpr), ph = Math.round(cssH * dpr);
+  if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; cv.style.height = cssH + 'px'; }
   const ctx = cv.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssW, cssH);
 
   const { candles, sig } = state;
   const fc = state.fc;
-  const padL = 8, padR = 78, padT = 14, padB = 26;
+  const total = candles.length;
+  const bars = Math.max(MIN_BARS, Math.min(total, Math.round(view.bars)));
+  const off = Math.max(0, Math.min(total - bars, Math.round(view.off)));
+  const s0 = total - off - bars, s1 = total - off;
+  const V = candles.slice(s0, s1);
+  const e9 = sig.e9.slice(s0, s1), e21 = sig.e21.slice(s0, s1), e50 = sig.e50.slice(s0, s1);
+  const n = V.length;
+  const isLive = off === 0;
+
+  const padL = 10, padR = 86, padT = 12, padB = 26, gap = 10;
   const W = cssW - padL - padR, H = cssH - padT - padB;
-  const Wc = fc ? W * 0.8 : W;
+  const Hv = Math.max(34, Math.round(H * .13)), Hp = H - Hv - gap;   // volume strip + price pane
+  const Wc = fc && isLive ? W * .78 : W;
   const price = state.stats.price;
   const proj = [];
-  if (fc) {
+  if (fc && isLive) {
     for (let k = 1; k <= FC_H; k++) {
       const d = fc.drift * (k / FC_H), s = fc.sd * Math.sqrt(k / FC_H);
       proj.push({ k, mid: price + d, up: price + d + s, dn: price + d - s });
     }
   }
-  const e50v = sig.e50.filter(v => v != null);
-  const hi = Math.max(...candles.map(c => c[2]), ...e50v, ...proj.map(p => p.up));
-  const lo = Math.min(...candles.map(c => c[3]), ...e50v, ...proj.map(p => p.dn));
-  const rng = hi - lo || 1;
-  const x = i => padL + (i + 0.5) * (Wc / candles.length);
-  const px = k => x(candles.length - 1) + (k / FC_H) * (W - Wc);
-  const y = v => padT + (1 - (v - lo) / rng) * H;
-  const cw = Math.max(1.5, Wc / candles.length * 0.62);
 
-  ctx.lineWidth = 1; ctx.font = '11px system-ui';
-  for (let g = 0; g <= 4; g++) {
-    const v = lo + rng * g / 4, yy = y(v);
-    ctx.strokeStyle = '#1b2233';
-    ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + W, yy); ctx.stroke();
-    ctx.fillStyle = '#6b7280'; ctx.fillText(fmt(v), padL + W + 8, yy + 4);
+  let tHi = -Infinity, tLo = Infinity, volMax = 0;
+  for (let i = 0; i < n; i++) {
+    const c = V[i];
+    if (c[2] > tHi) tHi = c[2];
+    if (c[3] < tLo) tLo = c[3];
+    if (c[5] > volMax) volMax = c[5];
+    const v = e50[i];
+    if (v != null) { if (v > tHi) tHi = v; if (v < tLo) tLo = v; }
+  }
+  for (const p of proj) { if (p.up > tHi) tHi = p.up; if (p.dn < tLo) tLo = p.dn; }
+  const head = (tHi - tLo) * .06 || 1;
+  tHi += head; tLo -= head;
+  if (!view.dom) { view.dom = { hi: tHi, lo: tLo }; }
+  else {
+    const k = .3;
+    view.dom.hi += (tHi - view.dom.hi) * k;
+    view.dom.lo += (tLo - view.dom.lo) * k;
+  }
+  const hi = view.dom.hi, lo = view.dom.lo, rng = (hi - lo) || 1;
+  const step = Wc / n;
+  const x = i => padL + (i + .5) * step;
+  const px = k => x(n - 1) + (k / FC_H) * (W - Wc);
+  const y = v => padT + (1 - (v - lo) / rng) * Hp;
+  const yInv = py => lo + (1 - (py - padT) / Hp) * rng;
+  const volTop = padT + Hp + gap;
+  const vy = v => volTop + Hv - (v / (volMax || 1)) * (Hv * .9);
+  chartGeo = { padL, step, n, wc: Wc, w: W, padT, volTop, Hv, hp: Hp, cssW, cssH,
+               times: V.map(c => c[0]), yInv };
+
+  // keep easing the axis until it has settled, then stop
+  if (view.domRaf) { cancelAnimationFrame(view.domRaf); view.domRaf = 0; }
+  if (Math.abs(tHi - hi) > rng * .0015 || Math.abs(tLo - lo) > rng * .0015) {
+    view.domRaf = requestAnimationFrame(() => { view.domRaf = 0; drawChart(); });
   }
 
-  candles.forEach((c, i) => {
+  const ax = v => v >= 100 ? NF0.format(v) : v.toFixed(2);
+  const gx = niceStep(rng / 5);
+  const spanMs = V[n - 1][0] - V[0][0];
+  const wide = spanMs > 36e5 * 30;
+  const stamp = t => {
+    const d = new Date(t), hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (spanMs > 36e5 * 30) return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    if (spanMs > 36e5 * 10) return `${d.getDate()}/${d.getMonth() + 1} ${hm}`;
+    return hm;
+  };
+  const tickEvery = Math.max(1, Math.round(n / Math.max(2, Math.floor(W / (wide ? 100 : 78)))));
+  const tIdx = [];
+  for (let i = n - 1; i >= 0; i -= tickEvery) tIdx.push(i);
+
+  ctx.lineWidth = 1; ctx.font = '11px system-ui';
+  let lastLblR = Infinity;                       // newest-first, so labels never run into each other
+  tIdx.forEach(i => {
+    const xx = Math.round(x(i)) + .5;
+    ctx.strokeStyle = '#141a26';
+    ctx.beginPath(); ctx.moveTo(xx, padT); ctx.lineTo(xx, volTop + Hv); ctx.stroke();
+    const lbl = stamp(V[i][0]), lw = ctx.measureText(lbl).width;
+    const lx = Math.min(padL + W - lw, Math.max(padL, x(i) - lw / 2));
+    if (lx + lw > lastLblR - 8) return;
+    lastLblR = lx;
+    ctx.fillStyle = '#7b8496';
+    ctx.fillText(lbl, lx, cssH - 9);
+  });
+  for (let v = Math.ceil(lo / gx) * gx; v < hi; v += gx) {
+    const yy = Math.round(y(v)) + .5;
+    ctx.strokeStyle = '#1b2233';
+    ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + W, yy); ctx.stroke();
+    ctx.fillStyle = '#7b8496'; ctx.fillText(ax(v), padL + W + 8, yy + 4);
+  }
+  ctx.strokeStyle = '#1b2233';
+  ctx.beginPath(); ctx.moveTo(padL, volTop - gap / 2); ctx.lineTo(padL + W, volTop - gap / 2); ctx.stroke();
+  ctx.fillStyle = '#7b8496';
+  ctx.fillText('volume', padL + 2, volTop + 10);
+  ctx.textAlign = 'right'; ctx.fillText(NF0.format(volMax) + ' BTC', padL + W - 2, volTop + 10);
+  ctx.textAlign = 'left';
+
+  const dense = step < 2.4;
+  const cw = dense ? Math.max(1, step) : Math.max(2, Math.min(16, step * 0.68));
+
+  const hIdx = state.hoverT == null ? -1 : V.findIndex(c => c[0] === state.hoverT);
+  if (hIdx >= 0) {
+    ctx.fillStyle = 'rgba(255,255,255,.05)';
+    ctx.fillRect(x(hIdx) - step / 2, padT, step, volTop + Hv - padT);
+  }
+
+  V.forEach((c, i) => {
     const bull = c[4] >= c[1];
-    ctx.strokeStyle = ctx.fillStyle = bull ? '#16c784' : '#ea3943';
-    ctx.beginPath(); ctx.moveTo(x(i), y(c[2])); ctx.lineTo(x(i), y(c[3])); ctx.stroke();
-    const a = y(Math.max(c[1], c[4])), b = y(Math.min(c[1], c[4]));
-    ctx.fillRect(x(i) - cw / 2, a, cw, Math.max(1, b - a));
+    ctx.fillStyle = bull ? 'rgba(22,199,132,.5)' : 'rgba(234,57,67,.5)';
+    ctx.fillRect(x(i) - cw / 2, vy(c[5]), cw, volTop + Hv - vy(c[5]));
   });
 
-  [[sig.e9, '#3b82f6'], [sig.e21, '#f5a524'], [sig.e50, '#a78bfa']].forEach(([series, col]) => {
-    ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.beginPath();
+  if (dense) {
+    // too many bars per pixel for readable bodies: draw the hi/lo range as a band
+    ctx.strokeStyle = 'rgba(148,163,184,.28)';
+    ctx.beginPath();
+    V.forEach((c, i) => {
+      const xx = Math.round(x(i)) + .5;
+      ctx.moveTo(xx, y(c[2])); ctx.lineTo(xx, y(c[3]));
+    });
+    ctx.stroke();
+    const bull = V[n - 1][4] >= V[0][1];
+    ctx.strokeStyle = bull ? '#16c784' : '#ea3943'; ctx.lineWidth = 1.6; ctx.beginPath();
+    V.forEach((c, i) => i ? ctx.lineTo(x(i), y(c[4])) : ctx.moveTo(x(i), y(c[4])));
+    ctx.stroke(); ctx.lineWidth = 1;
+  } else {
+    V.forEach((c, i) => {
+      const bull = c[4] >= c[1];
+      ctx.strokeStyle = ctx.fillStyle = bull ? '#16c784' : '#ea3943';
+      const xx = Math.round(x(i)) + .5;
+      ctx.beginPath(); ctx.moveTo(xx, y(c[2])); ctx.lineTo(xx, y(c[3])); ctx.stroke();
+      const a = y(Math.max(c[1], c[4])), b = y(Math.min(c[1], c[4]));
+      ctx.fillRect(x(i) - cw / 2, a, cw, Math.max(1.2, b - a));
+    });
+  }
+
+  // at 300 bars EMA 9 just adds noise, so drop it from the dense view
+  const emas = [[e9, '#3b82f6', 2], [e21, '#f5a524', 1.8], [e50, '#a78bfa', 1.6]].filter((_, k) => !dense || k > 0);
+  emas.forEach(([series, col, lw]) => {
+    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.beginPath();
     let started = false;
     series.forEach((v, i) => {
       if (v == null) return;
@@ -751,30 +1065,39 @@ function drawChart() {
     });
     ctx.stroke();
   });
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 1; ctx.lineJoin = 'miter';
+
+  const halo = (txt, tx, ty, col, align) => {
+    ctx.textAlign = align || 'left';
+    ctx.font = 'bold 11px system-ui'; ctx.lineWidth = 3.5;
+    ctx.strokeStyle = 'rgba(10,14,23,.85)'; ctx.strokeText(txt, tx, ty);
+    ctx.fillStyle = col; ctx.fillText(txt, tx, ty);
+    ctx.textAlign = 'left'; ctx.lineWidth = 1; ctx.font = '11px system-ui';
+  };
 
   if (proj.length) {
-    const now = x(candles.length - 1);
+    const now = x(n - 1);
     const rgb = fc.p >= 0.5 ? '22,199,132' : '234,57,67';
-    ctx.strokeStyle = '#2b3548';
-    ctx.beginPath(); ctx.moveTo(now, padT); ctx.lineTo(now, padT + H); ctx.stroke();
+    ctx.strokeStyle = '#394459'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(now, padT); ctx.lineTo(now, volTop + Hv); ctx.stroke();
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(now, y(price));
     proj.forEach(p => ctx.lineTo(px(p.k), y(p.up)));
     for (let i = proj.length - 1; i >= 0; i--) ctx.lineTo(px(proj[i].k), y(proj[i].dn));
     ctx.closePath();
-    ctx.fillStyle = `rgba(${rgb},.14)`; ctx.fill();
-    ctx.strokeStyle = `rgba(${rgb},.45)`; ctx.setLineDash([3, 3]);
+    ctx.fillStyle = `rgba(${rgb},.15)`; ctx.fill();
+    ctx.strokeStyle = `rgba(${rgb},.5)`; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(now, y(price));
     proj.forEach(p => ctx.lineTo(px(p.k), y(p.mid)));
     ctx.stroke(); ctx.setLineDash([]);
     const end = proj[proj.length - 1];
     ctx.fillStyle = `rgb(${rgb})`;
-    ctx.beginPath(); ctx.arc(px(FC_H), y(end.mid), 3.5, 0, Math.PI * 2); ctx.fill();
-    ctx.font = 'bold 11px system-ui';
-    ctx.fillText(`${Math.round(fc.p * 100)}%`, px(FC_H) - 9, y(end.up) - 6);
-    ctx.fillStyle = '#6b7280'; ctx.font = '11px system-ui';
-    ctx.fillText('1σ band', now + 4, padT + 10);
+    ctx.beginPath(); ctx.arc(px(FC_H), y(end.mid), 4, 0, Math.PI * 2); ctx.fill();
+    halo(`${Math.round(fc.p * 100)}% up`, px(FC_H) - 8, y(end.up) - 7, `rgb(${rgb})`, 'right');
+    halo(`≈ ${ax(end.mid)}`, px(FC_H) - 8, y(end.mid) + 4, `rgb(${rgb})`, 'right');
+    halo('now', now + 5, padT + 11, '#9ca3af');
+    halo('1σ band', now + 5, padT + 25, '#6b7280');
   }
 
   const marks = [];
@@ -782,42 +1105,196 @@ function drawChart() {
     const d = sig.e9[i] > sig.e21[i] ? 1 : -1;
     if (d !== (marks.length ? marks[marks.length - 1].d : null)) marks.push({ i, d });
   }
-  marks.slice(-14).forEach(m => {
-    const bull = m.d === 1;
+  const msz = Math.max(3.5, Math.min(6.5, step * 0.34));
+  marks.filter(m => m.i >= s0 && m.i < s1).slice(-10).forEach(m => {
+    const j = m.i - s0, bull = m.d === 1;
+    const mx = x(j), my = bull ? y(V[j][3]) + msz + 3 : y(V[j][2]) - msz - 3;
     ctx.fillStyle = bull ? '#16c784' : '#ea3943';
-    const px = x(m.i), py = bull ? y(candles[m.i][3]) + 12 : y(candles[m.i][2]) - 12;
     ctx.beginPath();
-    ctx.moveTo(px, bull ? py - 7 : py + 7);
-    ctx.lineTo(px - 5, py); ctx.lineTo(px + 5, py);
+    ctx.moveTo(mx, bull ? my - msz : my + msz);
+    ctx.lineTo(mx - msz, my); ctx.lineTo(mx + msz, my);
     ctx.closePath(); ctx.fill();
   });
 
-  ctx.strokeStyle = '#4b5563'; ctx.setLineDash([4, 4]);
-  ctx.beginPath(); ctx.moveTo(padL, y(price)); ctx.lineTo(padL + W, y(price)); ctx.stroke();
-  ctx.setLineDash([]);
+  const py = Math.round(y(price)) + .5;
+  ctx.strokeStyle = 'rgba(148,163,184,.5)'; ctx.setLineDash([5, 4]);
+  ctx.beginPath(); ctx.moveTo(padL, py); ctx.lineTo(padL + W, py); ctx.stroke(); ctx.setLineDash([]);
   ctx.fillStyle = state.act === 'BUY' ? '#16c784' : state.act === 'SELL' ? '#ea3943' : '#f5a524';
-  ctx.fillRect(padL + W + 2, y(price) - 9, padR - 4, 18);
-  ctx.fillStyle = '#0a0e17'; ctx.font = 'bold 11px system-ui';
-  ctx.fillText(fmt(price), padL + W + 7, y(price) + 4);
+  ctx.fillRect(padL + W + 3, py - 9, padR - 6, 18);
+  ctx.fillStyle = '#080b12'; ctx.font = 'bold 11.5px system-ui';
+  ctx.fillText(ax(price), padL + W + 9, py + 4);
+  ctx.font = '11px system-ui';
 
-  const spanH = (candles[candles.length - 1][0] - candles[0][0]) / 3.6e6;
-  const stamp = t => {
-    const d = new Date(t);
-    return spanH > 30 ? d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-                      : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-  ctx.fillStyle = '#6b7280'; ctx.font = '11px system-ui';
-  [0, Math.floor(candles.length / 2), candles.length - 1].forEach((i, g) => {
-    const label = stamp(candles[i][0]);
-    ctx.fillText(label, g === 0 ? padL : g === 2 ? padL + W - ctx.measureText(label).width : x(i) - 18, cssH - 8);
-  });
+  if (!isLive) halo(`history · ${off} bar${off === 1 ? '' : 's'} back`, padL + Wc - 6, padT + 12, '#9ca3af', 'right');
 
-  $('ohlc').textContent = `H ${fmt(state.stats.hi)} · L ${fmt(state.stats.lo)} · ${state.src.name}`;
+  if (hIdx >= 0) {
+    const c = V[hIdx], xx = x(hIdx);
+    const prev = hIdx > 0 ? V[hIdx - 1] : (s0 > 0 ? candles[s0 - 1] : null);
+    ctx.strokeStyle = 'rgba(148,163,184,.5)'; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(xx, padT); ctx.lineTo(xx, volTop + Hv); ctx.stroke(); ctx.setLineDash([]);
+
+    const body = ((c[4] - c[1]) / c[1]) * 100, gi = s0 + hIdx;
+    const head = `${new Date(c[0]).toLocaleString([], { month: 'short', day: 'numeric',
+                   hour: '2-digit', minute: '2-digit' })} · ${iv()} · ${state.src.name}`;
+    const rows = [
+      ['open', ax(c[1])], ['high', ax(c[2])], ['low', ax(c[3])],
+      ['close', `${ax(c[4])} ${body >= 0 ? '+' : ''}${body.toFixed(2)}%`],
+      ['change', `${c[4] - c[1] >= 0 ? '+' : ''}${NF2.format(c[4] - c[1])}`],
+      ['range', `${NF2.format(c[2] - c[3])} (${(((c[2] - c[3]) / c[3]) * 100).toFixed(2)}%)`],
+      ['prev close', prev ? ax(prev[4]) : '—'],
+      ['volume', `${NF0.format(c[5])} BTC`],
+      ['taker buy', c[6] != null && c[5] ? ((c[6] / c[5]) * 100).toFixed(1) + '%' : 'n/a'],
+      ['ema 9 / 21', `${e9[hIdx] == null ? '—' : ax(e9[hIdx])} / ${e21[hIdx] == null ? '—' : ax(e21[hIdx])}`],
+      ['ema 50', e50[hIdx] == null ? '—' : ax(e50[hIdx])],
+      ['rsi 14', sig.rsi[gi] == null ? '—' : sig.rsi[gi].toFixed(1)],
+      ['macd hist', sig.macd.hist[gi] == null ? '—' : NF2.format(sig.macd.hist[gi])],
+      ['atr 14', sig.atrS[gi] == null ? '—' : NF2.format(sig.atrS[gi])]
+    ];
+    const per = Math.ceil(rows.length / 2), padx = 11, lh = 15;
+    let colw = 152;                                   // shrink the columns instead of overflowing narrow charts
+    if (colw * 2 + padx * 2 - 14 > W - 6) colw = Math.max(78, Math.floor((W - 6 - padx * 2 + 14) / 2));
+    const bw = colw * 2 + padx * 2 - 14, bh = per * lh + 27;
+    const bx = xx + 14 + bw > padL + W ? Math.max(padL, xx - bw - 14) : xx + 14;
+    const hy = state.hoverY == null ? y(c[4]) : state.hoverY;
+    const by = Math.min(volTop + Hv - bh, Math.max(padT, hy - bh / 2));
+    ctx.fillStyle = 'rgba(16,21,34,.97)'; ctx.strokeStyle = '#394459'; ctx.lineWidth = 1;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 10); ctx.fill(); ctx.stroke(); }
+    else { ctx.fillRect(bx, by, bw, bh); ctx.strokeRect(bx, by, bw, bh); }
+    ctx.fillStyle = '#cbd5e1'; ctx.font = 'bold 10.5px system-ui';
+    ctx.fillText(head, bx + padx, by + 15);
+    ctx.font = '10px system-ui';
+    ctx.strokeStyle = '#2b3548';
+    ctx.beginPath(); ctx.moveTo(bx + padx, by + 21.5); ctx.lineTo(bx + bw - padx, by + 21.5); ctx.stroke();
+    rows.forEach(([k, v], r) => {
+      const x0 = bx + padx + Math.floor(r / per) * colw, yy = by + 35 + (r % per) * lh;
+      ctx.fillStyle = '#8b93a5'; ctx.fillText(k, x0, yy);
+      ctx.fillStyle = '#e5e7eb'; ctx.textAlign = 'right'; ctx.fillText(v, x0 + colw - 16, yy);
+      ctx.textAlign = 'left';
+    });
+
+    const cy = state.hoverY;
+    if (cy != null && cy > padT && cy < padT + Hp && Math.abs(cy - py) > 15) {
+      const yy = Math.round(cy) + .5;
+      ctx.strokeStyle = 'rgba(148,163,184,.32)'; ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + W, yy); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#2b3548'; ctx.fillRect(padL + W + 3, cy - 9, padR - 6, 18);
+      ctx.fillStyle = '#e5e7eb'; ctx.font = 'bold 11.5px system-ui';
+      ctx.fillText(ax(yInv(cy)), padL + W + 9, cy + 4);
+      ctx.font = '11px system-ui';
+    }
+  }
+
+  $('barCount').textContent = `${bars} bars${isLive ? '' : ' · −' + off}`;
+  $('ohlc').textContent = hIdx >= 0
+    ? `${new Date(V[hIdx][0]).toLocaleString([], { month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit' })} · O ${ax(V[hIdx][1])} H ${ax(V[hIdx][2])} L ${ax(V[hIdx][3])} C ${ax(V[hIdx][4])}`
+    : `24h H ${fmt(state.stats.hi)} · L ${fmt(state.stats.lo)} · ${state.src.name} · ${bars} × ${iv()}`;
 }
+
+let drawQueued = false;
+function redraw() {
+  if (drawQueued || document.hidden) return;
+  drawQueued = true;
+  requestAnimationFrame(() => { drawQueued = false; if (state.candles) drawChart(); });
+}
+
+// ---- navigation: wheel zoom, drag/pinch pan, keyboard, buttons ----
+const pointers = new Map();
+let drag = null, pinch = null;
+const pinchDist = () => {
+  const a = [...pointers.values()];
+  return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+};
+const fracAt = mx => (chartGeo ? Math.max(0, Math.min(1, (mx - chartGeo.padL) / chartGeo.wc)) : 1);
+function hoverAt(mx, my) {
+  if (!chartGeo) return;
+  const j = Math.max(0, Math.min(chartGeo.n - 1, Math.floor((mx - chartGeo.padL) / chartGeo.step)));
+  const t = chartGeo.times[j], yy = Math.round(my);
+  if (t !== state.hoverT || yy !== state.hoverY) { state.hoverT = t; state.hoverY = yy; redraw(); }
+}
+
+const cvs = $('chart');
+cvs.addEventListener('wheel', e => {
+  if (!chartGeo) return;
+  e.preventDefault();
+  if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) panBy(Math.round(e.deltaX / chartGeo.step));
+  else zoomTo(view.tBars * Math.exp(e.deltaY * .0018), fracAt(e.offsetX));
+}, { passive: false });
+
+cvs.addEventListener('pointerdown', e => {
+  if (!chartGeo) return;
+  try { cvs.setPointerCapture(e.pointerId); } catch (_) {}
+  pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+  if (pointers.size === 2) {
+    const a = [...pointers.values()];
+    pinch = { d: pinchDist(), bars: view.tBars, mid: (a[0].x + a[1].x) / 2 };
+    drag = null;
+  } else { drag = { id: e.pointerId, x: e.offsetX, off: Math.round(view.off) }; pinch = null; }
+  cvs.classList.add('grabbing');
+});
+
+cvs.addEventListener('pointermove', e => {
+  const p = pointers.get(e.pointerId);
+  if (p) { p.x = e.offsetX; p.y = e.offsetY; }
+  if (pointers.size !== 2) pinch = null;
+  if (pinch) {
+    const d = pinchDist();
+    if (d > 16) zoomTo(pinch.bars * (pinch.d / d), fracAt(pinch.mid));
+    return;
+  }
+  if (drag && drag.id === e.pointerId && pointers.size === 1) {
+    const dx = e.offsetX - drag.x;
+    if (Math.abs(dx) > 2) {
+      panTo(drag.off + Math.round(dx / chartGeo.step), true);
+      state.hoverT = state.hoverY = null;
+      return;
+    }
+  }
+  if (drag || p) return;                       // a live gesture never paints a tooltip
+  hoverAt(e.offsetX, e.offsetY);
+});
+
+function endPointer(e) {
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinch = null;
+  if (!pointers.size || (drag && drag.id === e.pointerId)) { drag = null; cvs.classList.remove('grabbing'); }
+}
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => cvs.addEventListener(t, endPointer));
+cvs.addEventListener('pointerleave', () => {
+  if (!drag) { state.hoverT = state.hoverY = null; redraw(); }
+});
+cvs.addEventListener('dblclick', () => resetView(120));
+document.addEventListener('keydown', e => {
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  const d = Math.max(1, Math.round(view.tBars * .15));
+  if (e.key === 'ArrowLeft') panBy(d);
+  else if (e.key === 'ArrowRight') panBy(-d);
+  else if (e.key === '+' || e.key === '=') zoomTo(view.tBars * .72, 1);
+  else if (e.key === '-' || e.key === '_') zoomTo(view.tBars / .72, 1);
+  else if (e.key === 'Home') goLive();
+  else return;
+  e.preventDefault();
+});
+
+$('zIn').onclick = () => zoomTo(view.tBars * .72, 1);
+$('zOut').onclick = () => zoomTo(view.tBars / .72, 1);
+$('pLeft').onclick = () => panBy(Math.max(1, Math.round(view.tBars * .2)));
+$('pRight').onclick = () => panBy(-Math.max(1, Math.round(view.tBars * .2)));
+$('fitBtn').onclick = () => { view.tBars = totalBars(); goLive(); };
+$('liveBtn').onclick = goLive;
+
+new ResizeObserver(redraw).observe(cvs.parentElement);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) { view.dom = null; redraw(); }
+});
+setInterval(() => {
+  const el = $('cdBar');
+  const p = live.render && !document.hidden ? Math.min(1, (Date.now() - live.beatAt) / RENDER_MS) : 0;
+  el.style.transform = `scaleX(${p.toFixed(3)})`;
+}, 120);
 
 $('refresh').onclick = load;
 $('interval').onchange = load;
-window.addEventListener('resize', () => state.candles && drawChart());
 window.addEventListener('beforeunload', stopLive);
 load();
 </script>
