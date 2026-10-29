@@ -8,10 +8,12 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   :root {
     --bg: #080b12; --panel: #121725; --panel2: #161c2c; --line: #1f2937; --line2: #2b3548;
-    --txt: #e5e7eb; --dim: #9ca3af; --dim2: #6b7280;
+    --txt: #e5e7eb; --dim: #a8b1c4; --dim2: #8a93a8;
     --up: #16c784; --down: #ea3943; --flat: #f5a524; --accent: #4f7dff;
     --radius: 16px; --shadow: 0 18px 40px -24px rgba(0,0,0,.9);
+    --gap: 16px;
   }
+  html { scroll-behavior: smooth; scroll-padding-top: 64px; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: radial-gradient(1100px 520px at 18% -12%, #131b2e 0%, var(--bg) 62%);
@@ -25,6 +27,32 @@
          border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
   .price { font-size: 27px; font-weight: 700; font-variant-numeric: tabular-nums; transition: color .3s; }
   .price.rise { color: var(--up); } .price.fall { color: var(--down); }
+
+  /* Pinned read-out: the four numbers worth glancing at, kept on screen while the
+     detail cards scroll past. Hidden until the top bar leaves the viewport. */
+  .cmdbar { position: fixed; inset: 0 0 auto 0; z-index: 40; transform: translateY(-102%);
+            transition: transform .26s cubic-bezier(.22,1,.36,1), opacity .2s;
+            opacity: 0; pointer-events: none;
+            background: rgba(10,14,22,.82); backdrop-filter: blur(14px) saturate(140%);
+            -webkit-backdrop-filter: blur(14px) saturate(140%);
+            border-bottom: 1px solid var(--line); }
+  .cmdbar.on { transform: none; opacity: 1; pointer-events: auto; }
+  .cmdbar-in { max-width: 1240px; margin: 0 auto; display: flex; align-items: center;
+               gap: 10px; padding: 9px clamp(12px, 2.4vw, 26px); flex-wrap: nowrap; }
+  .cmdbar .cprice { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cmdbar .chg { font-size: 11.5px; padding: 2px 7px; }
+  .cmdbar .ccall { font: 800 12px/1 system-ui; letter-spacing: .8px; padding: 6px 10px;
+                   border-radius: 8px; white-space: nowrap; }
+  .cmdbar .ccall.buy  { color: #04100b; background: var(--up); }
+  .cmdbar .ccall.sell { color: #1a0407; background: var(--down); }
+  .cmdbar .ccall.hold { color: #171104; background: var(--flat); }
+  .cmdbar .cprob { font-size: 11.5px; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cmdbar .cnote { font-size: 11px; color: var(--flat); white-space: nowrap; overflow: hidden;
+                   text-overflow: ellipsis; min-width: 0; }
+  .cmdbar .cjump { display: flex; gap: 5px; margin-left: auto; }
+  .cmdbar .cjump button { padding: 5px 9px; font-size: 10.5px; font-weight: 700; letter-spacing: .4px;
+                          border-radius: 999px; color: var(--dim); }
+  .cmdbar .cjump button:hover { color: var(--txt); }
   .chg { font-size: 14px; font-weight: 600; padding: 3px 9px; border-radius: 8px; }
   .pos { color: var(--up); background: rgba(22,199,132,.12); }
   .neg { color: var(--down); background: rgba(234,57,67,.12); }
@@ -35,6 +63,10 @@
     transition: border-color .18s, background .18s, transform .12s;
   }
   select:hover, button:hover { border-color: var(--line2); background: #1b2233; }
+  .rin input { background: var(--panel2); color: var(--txt); border: 1px solid var(--line);
+               border-radius: 10px; transition: border-color .18s; }
+  .rin input:hover { border-color: var(--line2); background: #1b2233; }
+  .rin input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   button:active { transform: translateY(1px); }
   select:focus-visible, button:focus-visible, canvas:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 2px;
@@ -44,13 +76,57 @@
   .led.on { background: var(--up); box-shadow: 0 0 9px var(--up); animation: blink 1s infinite; }
   .led.slow { background: var(--flat); box-shadow: 0 0 9px var(--flat); }
   @keyframes blink { 50% { opacity: .3 } }
-  .grid { display: grid; grid-template-columns: 360px 1fr; gap: 16px; margin-top: 16px; }
-  @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
-  .col { display: flex; flex-direction: column; gap: 16px; }
+  .grid { display: grid; grid-template-columns: 360px 1fr; gap: var(--gap); margin-top: var(--gap); }
+  .col { display: flex; flex-direction: column; gap: var(--gap); }
+  @media (max-width: 1000px) {
+    /* Two columns collapse, so let the individual cards reorder instead of the
+       whole left column dropping in front of the chart. */
+    .grid { display: flex; flex-direction: column; }
+    .col { display: contents; }
+    #cardSignal { order: 1; } #cardChart { order: 2; } #cardFc { order: 3; }
+    #cardScan { order: 4; } #cardTrade { order: 5; } #cardRisk { order: 6; } #cardDeriv { order: 7; }
+  }
   .card { background: linear-gradient(180deg, var(--panel2), var(--panel) 60%);
-          border: 1px solid var(--line); border-radius: var(--radius); padding: 18px;
-          box-shadow: var(--shadow); }
-  .signal { text-align: center; padding: 22px 16px 18px; }
+          border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px 20px;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.045), var(--shadow);
+          transition: border-color .2s; }
+  .card:hover { border-color: #26314a; }
+  .card.signal { text-align: center; padding: 22px 16px 18px; border-color: rgba(245,165,36,.22); }
+  .card.signal:has(.emb.buy)  { border-color: rgba(22,199,132,.3); }
+  .card.signal:has(.emb.sell) { border-color: rgba(234,57,67,.3); }
+
+  /* Collapsible detail cards: heading > button disclosure, body animates its grid row. */
+  .card-h3 { display: block; }
+  .card-h3::before { content: none; }
+  .card-t { display: flex; align-items: center; gap: 8px; width: 100%; cursor: pointer;
+            user-select: none; -webkit-user-select: none;
+            font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
+            text-align: inherit; padding: 0; margin: 0; background: none; border: 0;
+            transition: color .15s; }
+  .card-t::before { content: ''; width: 3px; height: 13px; border-radius: 2px; flex-shrink: 0;
+                    background: linear-gradient(180deg, var(--accent), #6ee7b7); }
+  .card-t .ttl { flex: 1; min-width: 0; }
+  .card-t:hover { color: var(--txt); }
+  .card-t .tail { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .card-t .hint { font-size: 11px; font-weight: 600; color: var(--dim2); letter-spacing: 0;
+                  text-transform: none; white-space: nowrap; overflow: hidden;
+                  text-overflow: ellipsis; max-width: 150px; }
+  /* Only a folded card shows its summary; open, it must not steal width from the title. */
+  .card:not(.closed) .card-t .hint { display: none; }
+  .card.closed .card-t .hint { color: var(--dim); }
+  /* Collapsed, the header trades the grade chip for the full sentence behind it. */
+  .card.closed .card-t .grade { display: none; }
+  .card.closed .card-t .hint.gA { color: var(--up); } .card.closed .card-t .hint.gB { color: #6ee7b7; }
+  .card.closed .card-t .hint.gC { color: var(--flat); } .card.closed .card-t .hint.gD { color: var(--dim); }
+  .chev { width: 8px; height: 8px; flex-shrink: 0; border-right: 2px solid var(--dim2);
+          border-bottom: 2px solid var(--dim2); transform: rotate(45deg) translate(-2px,-2px);
+          transition: transform .26s cubic-bezier(.22,1,.36,1), border-color .18s; }
+  .card-t:hover .chev { border-color: var(--txt); }
+  .card.closed .chev { transform: rotate(-45deg) translate(-2px,-2px); }
+  .card-b { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .3s cubic-bezier(.22,1,.36,1); }
+  .card-b > .bi { overflow: hidden; min-height: 0; transition: opacity .2s; }
+  .card.closed .card-b { grid-template-rows: 0fr; }
+  .card.closed .card-b > .bi { opacity: 0; }
 
   /* prediction emblem */
   .emb { --c: var(--flat); --glow: rgba(245,165,36,.5); display: flex; flex-direction: column; align-items: center; }
@@ -81,13 +157,19 @@
   .strength > i { display: block; height: 100%; width: 0; transition: width .4s; }
   .meta { font-size: 12px; color: var(--dim); }
   .rows { margin-top: 14px; display: flex; flex-direction: column; gap: 9px; }
+  /* The indicator read-out has no bars, so it packs into columns instead of eight full-width lines. */
+  .rows.ind { margin-top: 18px; display: grid; gap: 11px 20px;
+              grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); }
   .row { font-size: 12px; }
   .row-head { display: flex; justify-content: space-between; margin-bottom: 4px; }
   .row-head b { color: var(--txt); font-weight: 600; }
   .bar { position: relative; height: 5px; background: #1a1f2e; border-radius: 4px; }
   .bar::before { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: #2b3548; }
   .bar > i { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
-  h3 { font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--dim); }
+  h3 { display: flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 700;
+       letter-spacing: .7px; text-transform: uppercase; color: var(--dim); }
+  h3::before { content: ''; width: 3px; height: 13px; border-radius: 2px; flex-shrink: 0;
+               background: linear-gradient(180deg, var(--accent), #6ee7b7); }
   .chart-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
   .chart-head h3 { flex-shrink: 0; }
   #ohlc { font-variant-numeric: tabular-nums; }
@@ -95,12 +177,49 @@
   .cd > i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--accent), #6ee7b7);
             transform-origin: left; transform: scaleX(0); }
   .ctools { display: flex; align-items: center; gap: 6px; }
-  .ctools button { min-width: 34px; padding: 6px 10px; font-size: 14px; line-height: 1;
+  .ctools button { min-width: 36px; height: 34px; padding: 6px 10px; font-size: 14px; line-height: 1;
                    display: inline-flex; align-items: center; justify-content: center; }
-  .ctools .wide { font-size: 11.5px; font-weight: 700; letter-spacing: .4px; padding: 7px 11px; }
+  .ctools .wide { font-size: 11.5px; font-weight: 700; letter-spacing: .4px; padding: 7px 12px; }
   .ctools .live.on { color: var(--up); border-color: rgba(22,199,132,.45); background: rgba(22,199,132,.1); }
   .readout { font-size: 11.5px; color: var(--dim); min-width: 92px; text-align: center;
              font-variant-numeric: tabular-nums; }
+  .chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; width: 100%; }
+  .chip { min-height: 30px; font-size: 10.5px; font-weight: 700; letter-spacing: .5px;
+          padding: 6px 12px; border-radius: 999px;
+          color: var(--dim2); background: #141a26; border: 1px solid #232c3d; transition: color .15s, background .15s, border-color .15s; }
+  .chip:hover { color: var(--txt); border-color: var(--line2); }
+  .chip.on { color: var(--txt); background: rgba(59,130,246,.16); border-color: rgba(59,130,246,.5); }
+  .chip.pane.on { background: rgba(167,139,250,.16); border-color: rgba(167,139,250,.5); }
+  .grade { font: 800 10.5px/1 system-ui; letter-spacing: .5px; padding: 5px 9px; border-radius: 999px;
+           border: 1px solid; text-transform: uppercase; white-space: nowrap; }
+  .grade.a { color: var(--up); border-color: rgba(22,199,132,.45); background: rgba(22,199,132,.1); }
+  .grade.b { color: #6ee7b7; border-color: rgba(22,199,132,.3); background: rgba(22,199,132,.06); }
+  .grade.c { color: var(--flat); border-color: rgba(245,165,36,.4); background: rgba(245,165,36,.08); }
+  .grade.d { color: #9ca3af; border-color: #394459; background: rgba(148,163,184,.07); }
+  .est { margin-top: 9px; font-size: 11px; color: var(--dim); line-height: 1.9; }
+  .est b { color: var(--txt); font-variant-numeric: tabular-nums; }
+  .est i { color: #394459; font-style: normal; margin: 0 5px; }
+  .fan { width: 100%; height: 134px; display: block; margin-top: 12px; border-radius: 9px;
+         background: rgba(8,11,18,.55); border: 1px solid #1b2233; }
+  .fan-cap { font-size: 10.5px; color: var(--dim2); margin-top: 6px; line-height: 1.5; }
+  .sub { margin-top: 18px; padding-top: 12px; border-top: 1px solid #1c2434;
+         font-size: 10.5px; font-weight: 700; letter-spacing: .6px;
+         text-transform: uppercase; color: var(--dim2); }
+  .plist { margin-top: 8px; display: flex; flex-direction: column; gap: 7px; }
+  .prow { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 10px;
+          border: 1px solid #1f2736; border-radius: 9px; background: rgba(20,26,38,.5); }
+  .prow b { font-size: 11.5px; font-weight: 700; }
+  .prow .v { font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .prow .d { grid-column: 1 / -1; font-size: 10.5px; color: var(--dim); line-height: 1.45; margin-top: 2px; }
+  .zline { font-size: 11px; color: var(--dim); margin-bottom: 8px; line-height: 1.7; }
+  .zline b { color: var(--txt); font-variant-numeric: tabular-nums; font-weight: 700; }
+  .zline b.warm { color: var(--flat); } .zline b.hot { color: #fb7185; }
+  .none { font-size: 11.5px; color: var(--dim2); margin-top: 8px; line-height: 1.5; }
+  .bul { margin: 8px 0 0; padding-left: 17px; display: flex; flex-direction: column; gap: 7px;
+         font-size: 11.5px; color: var(--dim); line-height: 1.5; }
+  .bul li::marker { color: var(--flat); }
+  .bul.act li::marker { color: var(--accent); }
+  .bul.act li { color: #cbd5e1; }
   canvas { width: 100%; display: block; border-radius: 10px; cursor: crosshair;
            touch-action: none; background: rgba(8,11,18,.55); }
   canvas.grabbing { cursor: grabbing; }
@@ -109,7 +228,9 @@
   .kv { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; font-size: 12.5px; margin-top: 12px; }
   .kv span:nth-child(odd) { color: var(--dim); }
   .kv span:nth-child(even) { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
-  .foot { margin-top: 14px; font-size: 11px; color: #6b7280; text-align: center; line-height: 1.6; }
+  .foot { margin: 22px auto 6px; max-width: 780px; font-size: 11px; color: var(--dim2);
+          text-align: center; line-height: 1.65; padding: 14px 18px;
+          border-top: 1px solid #1a2231; }
   .prob { display: flex; height: 26px; border-radius: 9px; overflow: hidden; margin-top: 12px; }
   .prob > i { display: block; height: 100%; transition: width .5s; }
   .prob > i:first-child { background: rgba(22,199,132,.75); }
@@ -121,15 +242,32 @@
   .edge.none { background: rgba(245,165,36,.09); border: 1px solid rgba(245,165,36,.28); color: var(--flat); }
   .tstate { margin-top: 4px; font: 800 20px/1.2 system-ui; letter-spacing: .04em; text-transform: uppercase; }
   .tstate.wait { color: var(--flat); font-size: 13px; font-weight: 600; letter-spacing: .01em; text-transform: none; }
-  .tstate.long { color: var(--up); } .tstate.short { color: var(--down); } .tstate.dead { color: #6b7280; }
+  .tstate.long { color: var(--up); } .tstate.short { color: var(--down); } .tstate.dead { color: var(--dim2); }
   .chk { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 11.5px; }
-  .chk span { color: #6b7280; } .chk span.ok { color: var(--up); }
+  .chk span { color: var(--dim2); } .chk span.ok { color: var(--up); }
+  .rin { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-top: 12px; }
+  .rin label { font-size: 10.5px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase;
+               color: var(--dim2); display: flex; flex-direction: column; gap: 4px; }
+  .rin input, .rin select { width: 100%; font-size: 13px; font-weight: 600; padding: 6px 8px;
+               font-variant-numeric: tabular-nums; }
+  .rin input.warn { border-color: rgba(245,165,36,.6); }
   /* the trade card's labels are the shorter side, so let the values wrap instead */
   #tPlan span:nth-child(odd), #tStats span:nth-child(odd) { white-space: nowrap; }
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #232c3d; border-radius: 8px; border: 3px solid transparent;
+                              background-clip: content-box; }
+  ::-webkit-scrollbar-thumb:hover { background: #33405a; background-clip: content-box; }
+  ::selection { background: rgba(79,125,255,.35); }
+  @media (max-width: 860px) { .cmdbar .cjump, .cmdbar .cprob { display: none; } }
   @media (max-width: 640px) {
     .topbar { gap: 10px; } .symbol { font-size: 17px; } .price { font-size: 22px; }
-    .card { padding: 14px; border-radius: 14px; } .ctools button { min-width: 30px; padding: 5px 8px; }
+    .card { padding: 14px 15px 16px; border-radius: 14px; }
+    .ctools button { min-width: 32px; height: 31px; padding: 5px 8px; }
     .readout { min-width: 74px; }
+    .chip { min-height: 28px; padding: 5px 10px; }
+    .cmdbar .cnote { display: none; }
+    .cmdbar-in { gap: 8px; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;
@@ -138,6 +276,24 @@
 </style>
 </head>
 <body>
+<div class="cmdbar" id="cmdbar" aria-hidden="true">
+  <div class="cmdbar-in">
+    <div class="symbol" style="font-size:13px">BTC/USDT</div>
+    <div class="cprice" id="mPrice">—</div>
+    <div class="chg" id="mChg">—</div>
+    <div class="spacer"></div>
+    <div class="cprob" id="mProb">—</div>
+    <div class="ccall hold" id="mCall">—</div>
+    <div class="cnote" id="mNote"></div>
+    <div class="cjump">
+      <button data-jump="cardChart">Chart</button>
+      <button data-jump="cardFc">Forecast</button>
+      <button data-jump="cardTrade">Trade</button>
+      <button data-jump="cardRisk">Risk</button>
+    </div>
+    <div class="status"><i class="led" id="mLed"></i></div>
+  </div>
+</div>
 <div class="wrap">
   <div class="topbar">
     <div class="symbol">BTC / USDT</div>
@@ -153,12 +309,12 @@
       <option value="4h">4 hour</option>
     </select>
     <button id="refresh">Reload</button>
-    <div class="status"><i class="led" id="led"></i><span id="status">connecting…</span></div>
+    <div class="status"><i class="led" id="led"></i><span id="status" role="status" aria-live="polite">connecting…</span></div>
   </div>
 
   <div class="grid">
     <div class="col">
-      <div class="card signal">
+      <div class="card signal" id="cardSignal">
         <div class="emb hold" id="emb">
           <div class="emb-wrap">
             <svg class="emb-svg" viewBox="0 0 132 132" aria-hidden="true">
@@ -186,31 +342,96 @@
         <div class="rows" id="rows"></div>
       </div>
 
-      <div class="card">
-        <h3>Forecast · next <span id="fch">5</span> bars</h3>
-        <div class="prob"><i id="pfup" style="width:50%"></i><i id="pfdn" style="width:50%"></i></div>
-        <div class="prob-lbl"><span id="pfupt">UP 50%</span><span id="pfdnt">50% DOWN</span></div>
-        <div class="kv" id="fc"></div>
-        <div class="edge" id="edge"></div>
+      <div class="card fold" id="cardFc">
+        <h3 class="card-h3"><button class="card-t" aria-expanded="true" aria-controls="bFc">
+          <span class="ttl">Forecast · next <span id="fch">5</span> bars</span>
+          <span class="tail"><span class="hint" id="hFc"></span><span class="grade d" id="grade">—</span><i class="chev"></i></span>
+        </button></h3>
+        <div class="card-b"><div class="bi" id="bFc">
+          <div class="prob"><i id="pfup" style="width:50%"></i><i id="pfdn" style="width:50%"></i></div>
+          <div class="prob-lbl"><span id="pfupt">UP 50%</span><span id="pfdnt">50% DOWN</span></div>
+          <div class="est" id="est"></div>
+          <canvas id="fan" class="fan" tabindex="0"
+                  aria-label="Forward paths of the historical bars that most closely match the current bar shape"></canvas>
+          <div class="fan-cap" id="fanCap"></div>
+          <div class="sub">Scenarios · counted off the analogue paths</div>
+          <div class="kv" id="scen"></div>
+          <div class="sub">Model read-out</div>
+          <div class="kv" id="fc"></div>
+          <div class="edge" id="edge"></div>
+        </div></div>
       </div>
 
-      <div class="card">
-        <h3>5-minute trade</h3>
-        <div class="tstate wait" id="tState">building the 5m sample…</div>
-        <div class="kv" id="tPlan"></div>
-        <div class="chk" id="tChecks"></div>
-        <div class="kv" id="tStats"></div>
-        <div class="edge none" id="tNote"></div>
+      <div class="card fold" id="cardScan">
+        <h3 class="card-h3"><button class="card-t" aria-expanded="true" aria-controls="bScan">
+          <span class="ttl">Pattern &amp; anomaly scan</span>
+          <span class="tail"><span class="hint" id="hScan"></span><i class="chev"></i></span>
+        </button></h3>
+        <div class="card-b"><div class="bi" id="bScan">
+          <div class="kv" id="trendKv" style="margin-top:12px"></div>
+          <div class="sub">Patterns on the last closed bar</div>
+          <div class="plist" id="patList"></div>
+          <div class="sub">Statistical outliers</div>
+          <div class="plist" id="anomList"></div>
+          <div class="sub">Risks to this read</div>
+          <ul class="bul" id="riskList"></ul>
+          <div class="sub">What to do with it</div>
+          <ul class="bul act" id="actList"></ul>
+        </div></div>
       </div>
 
-      <div class="card">
-        <h3>Derivatives</h3>
-        <div class="kv" id="deriv"></div>
+      <div class="card fold" id="cardTrade">
+        <h3 class="card-h3"><button class="card-t" aria-expanded="true" aria-controls="bTrade">
+          <span class="ttl">5-minute trade</span>
+          <span class="tail"><span class="hint" id="hTrade"></span><i class="chev"></i></span>
+        </button></h3>
+        <div class="card-b"><div class="bi" id="bTrade">
+          <div class="tstate wait" id="tState">building the 5m sample…</div>
+          <div class="kv" id="tPlan"></div>
+          <div class="chk" id="tChecks"></div>
+          <div class="kv" id="tStats"></div>
+          <div class="edge none" id="tNote"></div>
+        </div></div>
+      </div>
+
+      <div class="card fold" id="cardRisk">
+        <h3 class="card-h3"><button class="card-t" aria-expanded="true" aria-controls="bRisk">
+          <span class="ttl">Risk &amp; cost</span>
+          <span class="tail"><span class="hint" id="hRisk"></span><i class="chev"></i></span>
+        </button></h3>
+        <div class="card-b"><div class="bi" id="bRisk">
+          <div class="rin">
+            <label>Equity USDT<input id="rEq" type="number" min="10" step="10" inputmode="decimal"></label>
+            <label>Risk % of equity<input id="rRisk" type="number" min="0.05" step="0.05" inputmode="decimal"></label>
+            <label>Leverage ×<input id="rLev" type="number" min="1" max="125" step="1" inputmode="numeric"></label>
+            <label>Stop × ATR<input id="rStop" type="number" min="0.25" step="0.25" inputmode="decimal"></label>
+            <label>Fees+slip bps RT<input id="rFee" type="number" min="0" step="0.5" inputmode="decimal"></label>
+            <label>Hold bars<input id="rHold" type="number" min="1" step="1" inputmode="numeric"></label>
+            <label>Margin mode
+              <select id="rMode"><option value="isolated">isolated</option><option value="cross">cross</option></select>
+            </label>
+            <label>Side
+              <select id="rSide"><option value="auto">follow signal</option><option value="1">long</option><option value="-1">short</option></select>
+            </label>
+          </div>
+          <div class="kv" id="rOut"></div>
+          <div class="edge none" id="rNote"></div>
+        </div></div>
+      </div>
+
+      <div class="card fold" id="cardDeriv">
+        <h3 class="card-h3"><button class="card-t" aria-expanded="true" aria-controls="bDeriv">
+          <span class="ttl">Derivatives</span>
+          <span class="tail"><span class="hint" id="hDeriv"></span><i class="chev"></i></span>
+        </button></h3>
+        <div class="card-b"><div class="bi" id="bDeriv">
+          <div class="kv" id="deriv"></div>
+        </div></div>
       </div>
     </div>
 
     <div class="col">
-      <div class="card">
+      <div class="card" id="cardChart">
         <div class="chart-head">
           <h3>Price + EMA</h3>
           <div class="meta" id="ohlc"></div>
@@ -224,10 +445,17 @@
             <button id="fitBtn" class="wide" title="Fit all loaded bars">FIT</button>
             <button id="liveBtn" class="wide live on" title="Follow the live candle (Home key)">&#9679; LIVE</button>
           </div>
+          <div class="chips" id="chartToggles" role="group" aria-label="Chart overlays and indicator panes">
+            <button class="chip" data-k="bb" title="Bollinger Bands 20, 2 (B key)">BB 20</button>
+            <button class="chip" data-k="vwap" title="Session-anchored VWAP, resets each UTC midnight (V key)">VWAP</button>
+            <button class="chip pane" data-k="rsi" title="RSI 14 sub-pane (R key)">RSI 14</button>
+            <button class="chip pane" data-k="macd" title="MACD 12/26/9 sub-pane (M key)">MACD</button>
+            <span class="meta" id="paneHint">overlays off</span>
+          </div>
         </div>
         <div class="cd"><i id="cdBar"></i></div>
         <canvas id="chart" height="420" tabindex="0"
-                aria-label="BTCUSDT perpetual futures candlestick chart with EMAs, volume and forecast cone"></canvas>
+                aria-label="BTCUSDT perpetual futures candlestick chart with EMAs, volume, optional Bollinger Bands, session VWAP and RSI or MACD panes"></canvas>
         <div class="legend">
           <span><span class="dot" style="background:#3b82f6"></span>EMA 9</span>
           <span><span class="dot" style="background:#f5a524"></span>EMA 21</span>
@@ -235,9 +463,13 @@
           <span><span class="dot" style="background:var(--up)"></span>EMA flip up</span>
           <span><span class="dot" style="background:var(--down)"></span>EMA flip down</span>
           <span><span class="dot" style="background:#4b5563"></span>Volume</span>
+          <span id="lgBB" hidden><span class="dot" style="background:#94a3b8"></span>BB 20 &middot; 2&sigma;</span>
+          <span id="lgVW" hidden><span class="dot" style="background:#e879f9"></span>VWAP (UTC anchored)</span>
+          <span id="lgAnom" hidden><span class="dot" style="background:#f5a524"></span>Anomaly &ge; 3&sigma;</span>
           <span>Scroll = zoom &middot; drag = pan &middot; hover = bar detail &middot; double-click = reset</span>
+          <span>Keys <b>B</b>/<b>V</b>/<b>R</b>/<b>M</b> toggle BB, VWAP, RSI, MACD</span>
         </div>
-        <div class="rows" id="indRows" style="margin-top:18px"></div>
+        <div class="rows ind" id="indRows"></div>
       </div>
     </div>
   </div>
@@ -270,6 +502,14 @@ const GLYPH = {
   hold: 'M66 44 L86 66 L66 88 L46 66 Z'
 };
 const view = { bars: 120, tBars: 120, off: 0, anchorT: null, dom: null, raf: 0, domRaf: 0 };
+// Which overlays and sub-panes are painted. Purely a reading preference, so it persists.
+const CHART_KEY = 'btc.chart.v1';
+const chartOn = { bb: false, vwap: false, rsi: false, macd: false };
+try { Object.assign(chartOn, JSON.parse(localStorage.getItem(CHART_KEY) || '{}')); } catch (e) { /* first run */ }
+const chartSave = () => { try { localStorage.setItem(CHART_KEY, JSON.stringify(chartOn)); } catch (e) { /* private mode */ } };
+// Bumped by any navigation. The 1-minute refresh defers only while you are actually moving the
+// chart — it never uses "the user panned at some point" as a reason to stop forever.
+let lastGesture = 0;
 
 const totalBars = () => (state.candles ? state.candles.length : LIMIT);
 function offFromAnchor() {
@@ -301,6 +541,7 @@ function stepView() {
 function zoomTo(target, u = 1) {
   const total = totalBars();
   if (!Number.isFinite(target)) return;
+  lastGesture = Date.now();
   const bars = Math.max(MIN_BARS, Math.min(total, Math.round(target)));
   const cur = Math.max(MIN_BARS, Math.min(total, Math.round(view.bars)));
   const start = total - Math.round(view.off) - cur;
@@ -313,6 +554,7 @@ function zoomTo(target, u = 1) {
 }
 function panTo(off, immediate) {
   if (!Number.isFinite(off)) return;
+  lastGesture = Date.now();
   const o = clampOff(Math.round(off));
   anchorAt(o);
   if (immediate) { view.off = o; redraw(); } else animateView();
@@ -531,6 +773,35 @@ function atr(candles, p = 14) {
     : Math.max(c[2] - c[3], Math.abs(c[2] - candles[i - 1][4]), Math.abs(c[3] - candles[i - 1][4])));
   return ema(tr, p);
 }
+function bollinger(closes, p = 20, mult = 2) {
+  const mid = new Array(closes.length).fill(null), up = mid.slice(), dn = mid.slice();
+  let sum = 0;
+  for (let i = 0; i < closes.length; i++) {
+    sum += closes[i];
+    if (i >= p) sum -= closes[i - p];
+    if (i < p - 1) continue;
+    const m = sum / p;
+    let varr = 0;
+    for (let j = i - p + 1; j <= i; j++) varr += (closes[j] - m) ** 2;
+    const sd = Math.sqrt(varr / p);
+    mid[i] = m; up[i] = m + mult * sd; dn[i] = m - mult * sd;
+  }
+  return { mid, up, dn };
+}
+// Anchored to the UTC session, so a fresh day wipes the average: overnight this is the
+// level day traders actually reference, not a rolling mean wearing a different name.
+function vwap(candles) {
+  const out = new Array(candles.length).fill(null);
+  let day = null, pv = 0, vv = 0;
+  candles.forEach((c, i) => {
+    const d = Math.floor(c[0] / 864e5);
+    if (d !== day) { day = d; pv = 0; vv = 0; }
+    const v = c[5] || 0;
+    pv += ((c[2] + c[3] + c[4]) / 3) * v; vv += v;
+    out[i] = vv > 0 ? pv / vv : null;
+  });
+  return out;
+}
 
 function buildSignals(candles, deriv, timeframe) {
   const closes = candles.map(k => k[4]);
@@ -584,7 +855,8 @@ function buildSignals(candles, deriv, timeframe) {
   const usable = parts.filter(p => Number.isFinite(p.v));
   const tw = usable.reduce((s, p) => s + p.w, 0);
   const score = usable.reduce((s, p) => s + p.v * p.w, 0) / tw;
-  return { parts: usable, score, price, vol, e9, e21, e50, atrS: a, closes, rsi: r, macd: m, taker, oiChg, funding };
+  return { parts: usable, score, price, vol, e9, e21, e50, atrS: a, closes, rsi: r, macd: m,
+           boll: bollinger(closes), vwap: vwap(candles), taker, oiChg, funding };
 }
 
 // Re-scores every historical bar from the indicator series already computed over it,
@@ -649,10 +921,278 @@ function forecast(candles, s, h) {
   };
 }
 
+// ---- forecast engine -------------------------------------------------------
+// Every figure below is either read straight off the bars in the buffer or a distributional
+// statement about them. Nothing asserts a directional edge until it has been measured against
+// the unconditional base rate on the same bars — and when it fails that test, the card says so.
+function quant(a, p) {
+  if (!a.length) return null;
+  const b = a.slice().sort((x, y) => x - y);
+  const i = (b.length - 1) * p, lo = Math.floor(i);
+  return b[lo] + (b[Math.min(b.length - 1, lo + 1)] - b[lo]) * (i - lo);
+}
+function medMAD(v) {
+  const f = v.filter(x => Number.isFinite(x));
+  if (f.length < 10) return [null, null];
+  const m = quant(f, .5);
+  const sd = quant(f.map(x => Math.abs(x - m)), .5) * 1.4826;
+  return [m, sd > 0 ? sd : null];
+}
+function linreg(v) {
+  const n = v.length;
+  if (n < 4) return { slope: 0, r2: 0 };
+  const mx = (n - 1) / 2;
+  const my = v.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0, sxx = 0, syy = 0;
+  for (let i = 0; i < n; i++) { const dx = i - mx, dy = v[i] - my; sxy += dx * dy; sxx += dx * dx; syy += dy * dy; }
+  if (!sxx || !syy) return { slope: 0, r2: 0 };
+  return { slope: sxy / sxx, r2: Math.min(1, (sxy * sxy) / (sxx * syy)) };
+}
+
+// Candlestick patterns, each as a pure predicate over the bar at i. `patOutcome` then asks the
+// buffer what actually happened after every historical occurrence — a pattern with no measured
+// forward history is decoration, and this labels it as such.
+const PAT = {
+  doji: { label: 'Doji', dir: 0, f: (cs, i) => { const c = cs[i], r = c[2] - c[3]; return r > 0 && Math.abs(c[4] - c[1]) <= r * .15; } },
+  hammer: { label: 'Hammer', dir: 1, f: (cs, i) => { const c = cs[i], r = c[2] - c[3], b = Math.abs(c[4] - c[1]);
+      return r > 0 && b > 0 && Math.min(c[1], c[4]) - c[3] >= b * 2 && c[2] - Math.max(c[1], c[4]) <= b; } },
+  star: { label: 'Shooting star', dir: -1, f: (cs, i) => { const c = cs[i], r = c[2] - c[3], b = Math.abs(c[4] - c[1]);
+      return r > 0 && b > 0 && c[2] - Math.max(c[1], c[4]) >= b * 2 && Math.min(c[1], c[4]) - c[3] <= b; } },
+  engulfUp: { label: 'Bullish engulfing', dir: 1, f: (cs, i) => i > 0 && cs[i][4] > cs[i][1] && cs[i - 1][4] < cs[i - 1][1]
+      && cs[i][4] - cs[i][1] > cs[i - 1][1] - cs[i - 1][4] && cs[i][1] <= cs[i - 1][4] && cs[i][4] >= cs[i - 1][1] },
+  engulfDn: { label: 'Bearish engulfing', dir: -1, f: (cs, i) => i > 0 && cs[i][4] < cs[i][1] && cs[i - 1][4] > cs[i - 1][1]
+      && cs[i][1] - cs[i][4] > cs[i - 1][4] - cs[i - 1][1] && cs[i][4] <= cs[i - 1][1] && cs[i][1] >= cs[i - 1][4] },
+  inside: { label: 'Inside bar', dir: 0, f: (cs, i) => i > 0 && cs[i][2] <= cs[i - 1][2] && cs[i][3] >= cs[i - 1][3] },
+  outside: { label: 'Outside bar', dir: 0, f: (cs, i) => i > 0 && cs[i][2] > cs[i - 1][2] && cs[i][3] < cs[i - 1][3] },
+  nr7: { label: 'NR7 tightest of 7', dir: 0, f: (cs, i) => { if (i < 6) return false; const r = cs[i][2] - cs[i][3];
+      if (r <= 0) return false; for (let k = i - 6; k < i; k++) if (cs[k][2] - cs[k][3] <= r) return false; return true; } },
+  streakUp: { label: 'Three up closes', dir: 1, f: (cs, i) => i >= 3 && cs[i][4] > cs[i - 1][4] && cs[i - 1][4] > cs[i - 2][4] && cs[i - 2][4] > cs[i - 3][4] },
+  streakDn: { label: 'Three down closes', dir: -1, f: (cs, i) => i >= 3 && cs[i][4] < cs[i - 1][4] && cs[i - 1][4] < cs[i - 2][4] && cs[i - 2][4] < cs[i - 3][4] },
+  stackUp: { label: 'EMA stack bullish', dir: 1, f: (cs, i, s) => s.e9[i] != null && s.e21[i] != null && s.e50[i] != null
+      && s.e9[i] > s.e21[i] && s.e21[i] > s.e50[i] },
+  stackDn: { label: 'EMA stack bearish', dir: -1, f: (cs, i, s) => s.e9[i] != null && s.e21[i] != null && s.e50[i] != null
+      && s.e9[i] < s.e21[i] && s.e21[i] < s.e50[i] },
+  squeeze: { label: 'Volatility squeeze', dir: 0, f: (cs, i, s) => { if (i < 60 || !s.atrS[i]) return false;
+      const w = s.atrS.slice(i - 60, i).filter(Number.isFinite); return w.length > 20 && s.atrS[i] < quant(w, .5) * .7; } },
+  reclaim: { label: 'Reclaimed EMA 50', dir: 1, f: (cs, i, s) => i > 0 && s.e50[i] != null && s.e50[i - 1] != null
+      && cs[i][4] > s.e50[i] && cs[i - 1][4] <= s.e50[i - 1] },
+  lose50: { label: 'Lost EMA 50', dir: -1, f: (cs, i, s) => i > 0 && s.e50[i] != null && s.e50[i - 1] != null
+      && cs[i][4] < s.e50[i] && cs[i - 1][4] >= s.e50[i - 1] }
+};
+function patOutcome(cs, s, key, h) {
+  const p = PAT[key], up = [], mv = [];
+  for (let i = 1; i < cs.length - h; i++) {
+    if (!p.f(cs, i, s)) continue;
+    up.push(cs[i + h][4] > cs[i][4] ? 1 : 0);
+    if (s.atrS[i]) mv.push((cs[i + h][4] - cs[i][4]) / s.atrS[i]);
+  }
+  const n = up.length;
+  return { n, up: n ? up.reduce((a, b) => a + b, 0) / n : null,
+           avg: mv.length ? mv.reduce((a, b) => a + b, 0) / mv.length : null };
+}
+
+// Robust outliers: median/MAD rather than mean/σ, because a single 8σ print would otherwise
+// inflate the very spread used to judge it.
+// One threshold for the scan and every label that quotes it, so the number cannot drift
+// out of sync with the text describing it.
+const ANOM_Z = 3;
+const ANOM = {
+  // Volume is heavy-tailed: a raw MAD-z calls every ordinary burst an outlier. On a log scale
+  // the same score means "n multiples of the typical proportional move", which is what we want.
+  volume: (cs, i) => cs[i][5] > 0 ? Math.log(cs[i][5]) : null,
+  'bar size': (cs, i, s) => s.atrS[i] ? Math.abs(cs[i][4] - cs[i][1]) / s.atrS[i] : null,
+  range: (cs, i, s) => s.atrS[i] ? (cs[i][2] - cs[i][3]) / s.atrS[i] : null,
+  'taker buy': (cs, i) => cs[i][6] != null && cs[i][5] > 0 ? cs[i][6] / cs[i][5] : null
+};
+function anomalyScan(cs, s, look = 140) {
+  const iC = cs.length - 2, from = Math.max(21, iC - look);
+  const flags = [], now = {};
+  for (const [name, f] of Object.entries(ANOM)) {
+    const vals = [];
+    for (let i = from; i <= iC; i++) vals.push(f(cs, i, s));
+    const [m, sd] = medMAD(vals);
+    if (sd == null) continue;
+    vals.forEach((v, k) => {
+      if (!Number.isFinite(v)) return;
+      const z = (v - m) / sd;
+      if (Math.abs(z) >= ANOM_Z) flags.push({ t: cs[from + k][0], name, z });
+    });
+    const lastV = vals[vals.length - 1];
+    if (Number.isFinite(lastV)) now[name] = (lastV - m) / sd;
+  }
+  flags.sort((a, b) => b.t - a.t);
+  const cutT = iC > 9 ? cs[iC - 9][0] : 0;
+  return { flags, recent: flags.filter(f => f.t >= cutT), now };
+}
+
+// Nearest-neighbour analogues on the last 12 normalised returns, in ATR units so a quiet
+// stretch is comparable to a violent one. Neighbours are forced W bars apart: without that,
+// twenty "distinct" matches are twenty overlapping copies of the same move.
+function analogueScan(cs, s, h, K = 20, W = 12) {
+  const cl = s.closes, A = s.atrS, n = cl.length, i0 = n - 2;
+  if (i0 < W + 60) return null;
+  const vec = j => {
+    const v = [];
+    for (let k = j - W + 1; k <= j; k++) { if (!A[k]) return null; v.push((cl[k] - cl[k - 1]) / A[k]); }
+    return v;
+  };
+  const tgt = vec(i0);
+  if (!tgt) return null;
+  const cands = [];
+  for (let j = i0 - h; j >= W; j--) {
+    const v = vec(j);
+    if (!v) continue;
+    let d = 0;
+    for (let k = 0; k < W; k++) d += (v[k] - tgt[k]) ** 2;
+    cands.push({ j, d: Math.sqrt(d) });
+  }
+  if (cands.length < 60) return null;
+  const baseUp = cands.filter(c => cl[c.j + h] > cl[c.j]).length / cands.length;
+  cands.sort((a, b) => a.d - b.d);
+  const near = [];
+  for (const c of cands) {
+    if (near.some(u => Math.abs(u.j - c.j) < W)) continue;
+    near.push(c);
+    if (near.length >= K) break;
+  }
+  if (near.length < 10) return null;
+  const win = cs.slice(-60);
+  const res = Math.max(...win.map(c => c[2])), sup = Math.min(...win.map(c => c[3]));
+  const paths = [], ends = [];
+  let tu = 0, td = 0;
+  for (const c of near) {
+    const p = []; let u = 0, dn = 0;
+    for (let t = 1; t <= h; t++) {
+      const b = cs[c.j + t];
+      p.push((cl[c.j + t] - cl[c.j]) / A[c.j]);
+      if (b[2] > res) u = 1;
+      if (b[3] < sup) dn = 1;
+    }
+    paths.push(p); ends.push(p[h - 1]); tu += u; td += dn;
+  }
+  const m = paths.length;
+  const med = [], lo = [], hi = [];
+  for (let t = 0; t < h; t++) {
+    const col = paths.map(p => p[t]);
+    med.push(quant(col, .5)); lo.push(quant(col, .1)); hi.push(quant(col, .9));
+  }
+  const hit = ends.filter(e => e > 0).length / m;
+  const se = Math.sqrt(Math.max(baseUp * (1 - baseUp), 1e-6) / m) * Math.sqrt(h);
+  const recent = [];
+  for (let k = i0 - W + 1; k <= i0; k++) recent.push((cl[k] - cl[k - 1]) / A[i0]);
+  return { W, h, m, baseUp, hit, se, real: m >= 15 && Math.abs(hit - baseUp) > 1.96 * se,
+    med, lo, hi, paths, ends, avg: ends.reduce((a, b) => a + b, 0) / m, worst: Math.min(...ends),
+    best: Math.max(...ends), touchRes: tu / m, touchSup: td / m, res, sup, recent,
+    spread: near.map(c => +c.d.toFixed(2)), times: near.map(c => cs[c.j][0]) };
+}
+
+function analyze(cs, s, fc, h) {
+  const n = cs.length, iC = n - 2, cl = s.closes;
+  if (n < 90) return null;
+  const atr = s.atrS[iC] || s.vol;
+
+  const lr20 = linreg(cl.slice(-21)), lr50 = linreg(cl.slice(-51));
+  const sl20 = atr ? lr20.slope / atr : 0, sl50 = atr ? lr50.slope / atr : 0;
+  const piv = [];
+  for (let k = 0; k < 5; k++) {
+    const w = cs.slice(Math.max(0, iC - k * 5 - 4), iC - k * 5 + 1);
+    if (w.length < 3) break;
+    piv.push({ hi: Math.max(...w.map(c => c[2])), lo: Math.min(...w.map(c => c[3])) });
+  }
+  let hh = 0, hl = 0, lh = 0, ll = 0;
+  for (let k = 0; k + 1 < piv.length; k++) {
+    piv[k].hi > piv[k + 1].hi ? hh++ : lh++;
+    piv[k].lo > piv[k + 1].lo ? hl++ : ll++;
+  }
+  const struct = hh >= 3 && hl >= 3 ? 'higher highs + higher lows'
+    : lh >= 3 && ll >= 3 ? 'lower highs + lower lows' : 'mixed, no clean structure';
+  const rets = [];
+  for (let i = 1; i < n; i++) if (s.atrS[i]) rets.push(Math.abs(cl[i] - cl[i - 1]) / s.atrS[i]);
+  const r20 = rets.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, rets.length);
+  const volPct = rets.length > 30 ? rets.filter(v => v <= r20).length / rets.length : null;
+  const regime = lr20.r2 > .55 && Math.abs(sl20) > .05 ? (sl20 > 0 ? 'trending up' : 'trending down')
+    : lr50.r2 > .55 && Math.abs(sl50) > .05 ? (sl50 > 0 ? 'trending up, slowly' : 'trending down, slowly')
+      : 'range / chop';
+
+  let baseUp = 0, bt = 0;
+  for (let i = 0; i < n - h; i++) { bt++; if (cl[i + h] > cl[i]) baseUp++; }
+  baseUp = bt ? baseUp / bt : null;
+
+  const pats = Object.keys(PAT).filter(k => PAT[k].f(cs, iC, s))
+    .map(k => ({ key: k, label: PAT[k].label, dir: PAT[k].dir, ...patOutcome(cs, s, k, h) }))
+    .filter(p => p.n >= 4)
+    .sort((a, b) => Math.abs((b.up ?? .5) - .5) - Math.abs((a.up ?? .5) - .5));
+
+  const an = anomalyScan(cs, s);
+  const ana = analogueScan(cs, s, h);
+
+  const pBucket = fc ? fc.p : null;
+  const pAna = ana ? (ana.hit * ana.m + 10 * (ana.baseUp ?? .5)) / (ana.m + 10) : null;
+  const pBlend = pBucket != null && pAna != null ? (pBucket + pAna) / 2
+    : pBucket != null ? pBucket : pAna;
+  const spread = pBucket != null && pAna != null ? Math.abs(pBucket - pAna) : null;
+
+  const sig1 = !!(fc && fc.real), sig2 = !!(ana && ana.real);
+  let letter, glabel;
+  if (!fc && !ana) { letter = 'D'; glabel = 'no sample yet'; }
+  else if (sig1 && sig2 && spread <= .08) { letter = 'A'; glabel = 'both estimators beat the base rate'; }
+  else if (sig1 || sig2) { letter = 'B'; glabel = 'one estimator beats the base rate'; }
+  else if (spread != null && spread > .15) { letter = 'D'; glabel = 'the estimators contradict each other'; }
+  else { letter = 'C'; glabel = 'inside the noise band — a coin flip'; }
+  if ((letter === 'A' || letter === 'B') && fc && fc.m < 25) { letter = 'C'; glabel = 'significant, but on too few bars'; }
+
+  const hrs = h * IV_MS[iv()] / 36e5;
+  const moveBps = fc ? Math.abs(fc.drift) / s.price * 1e4 : 0;
+  const risks = [];
+  if (fc) {
+    const ratio = moveBps > 0.1 ? (fc.sd / s.price * 1e4) / moveBps : Infinity;
+    if (!sig1) risks.push(`The 1σ band is ${ratio === Infinity ? 'far' : ratio.toFixed(1) + '×'} the expected move on ${iv()} — noise dominates signal at this horizon.`);
+    if (fc.m < 40) risks.push(`Only ${fc.m} bars matched the current signal, so the probability carries a ±${(fc.ci * 100).toFixed(0)} point error.`);
+  }
+  if (spread != null && spread > .12) risks.push(`The two estimators disagree by ${(spread * 100).toFixed(0)} points (${(pBucket * 100).toFixed(0)}% vs ${(pAna * 100).toFixed(0)}%), so the blend is untested.`);
+  if (an.recent.length) {
+    const worst = {};
+    an.recent.forEach(f => { if (worst[f.name] == null || Math.abs(f.z) > Math.abs(worst[f.name])) worst[f.name] = f.z; });
+    const tops = Object.entries(worst).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1])).slice(0, 2)
+      .map(([k, v]) => `${k} ${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}σ`);
+    risks.push(`${an.recent.length} statistical anomal${an.recent.length > 1 ? 'ies' : 'y'} in the last 10 bars (${
+      tops.join(', ')}) — this stretch is not a typical sample.`);
+  }
+  if (regime === 'range / chop') risks.push('No trend to ride: price is chopping, so a directional entry gets mean-reverted on you.');
+  if (s.funding != null) {
+    const c = Math.abs(s.funding) * 1e4 * hrs / 8;
+    if (c > moveBps) risks.push(`Funding alone costs ≈${c.toFixed(1)} bps over ${h} bars, more than the ${moveBps.toFixed(1)} bps the model expects price to move.`);
+  }
+  if (moveBps > 0 && moveBps < risk.feeBps) risks.push(`Expected move ${moveBps.toFixed(1)} bps is under your ${risk.feeBps} bps round-trip cost — the trade loses before the market decides.`);
+  if (ana && ana.worst < -2 && ana.best > 2) risks.push(`Analogue outcomes span ${ana.worst.toFixed(1)} to +${ana.best.toFixed(1)} ATR: the same setup has produced both a squeeze and a fakeout.`);
+
+  const acts = [];
+  if (letter === 'C' || letter === 'D')
+    acts.push(`Do not size off this forecast. The measured edge on ${iv()} is indistinguishable from zero — the defensible action is to wait for a level, not to trade a probability.`);
+  else
+    acts.push(`Both readings cleared their base rates, so a small directional tilt is defensible — but treat ${(pBlend * 100).toFixed(0)}% as an odds nudge, never a prediction.`);
+  if (pats.length) {
+    const p = pats[0];
+    acts.push(p.n >= 12 && baseUp != null && Math.abs(p.up - baseUp) > .06
+      ? `${p.label} is the only active pattern with history worth citing: it resolved up ${(p.up * 100).toFixed(0)}% of ${p.n} prior times vs ${(baseUp * 100).toFixed(0)}% always.`
+      : `${p.label} is active but its ${p.n}-bar history (${p.up == null ? '—' : (p.up * 100).toFixed(0)}% up) is not distinguishable from the ${(baseUp * 100).toFixed(0)}% base rate.`);
+  } else {
+    acts.push('No candlestick pattern is active on the last closed bar, so there is nothing to compare against history.');
+  }
+  if (ana) acts.push(`Analogues give the levels that matter: ${Math.round(ana.touchRes * 100)}% of them traded through ${fmt(ana.res)} and ${Math.round(ana.touchSup * 100)}% through ${fmt(ana.sup)} within ${h} bars — a stop inside either is a stop on noise.`);
+  acts.push(`If you take it anyway, the risk card already has it: ${risk.pct}% of equity, ${risk.stopAtr} ATR stop, ${risk.lev}× — that caps the loss at a number you chose rather than one the market picks.`);
+
+  return { iC, atr, sl20, r2: lr20.r2, sl50, r250: lr50.r2, struct, regime, volPct, baseUp,
+           pats, an, ana, pBucket, pAna, pBlend, spread, letter, glabel,
+           risks: risks.slice(0, 5), acts: acts.slice(0, 4) };
+}
+
 // Intl formatters are expensive to construct, so build them once and reuse in the draw loop
 const NF2 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const NF0 = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const fmt = n => n == null ? '—' : NF2.format(n);
+// whole dollars above $100, cents below — a fee that rounds to "$0" hides the whole point
+const usd = v => (v < -0.005 ? '−$' : '$') + (Math.abs(v) >= 100 ? NF0.format(Math.abs(v)) : Math.abs(v).toFixed(2));
 
 // ---- 5-minute trade signal -------------------------------------------------
 // Pullback-and-reclaim inside the trend: four core conditions gate the entry (trend, dip
@@ -797,8 +1337,6 @@ function renderTrade() {
   const cs = t.cs, i = t.live, c = cs[i], a = t.s.atrS[i], e = c[4];
   if (!t.cand || a == null) return;
   const dir = t.fire ? t.fire.dir : t.cand.dir;
-  const stop = e - dir * a, tgt = e + dir * TRADE_RR * a;
-  const stopPct = (a / e) * 100;
 
   S.className = 'tstate ' + (t.fire ? (dir > 0 ? 'long' : 'short') : t.cand.st.ok ? 'dead' : 'wait');
   S.textContent = t.fire ? `${dir > 0 ? '▲ LONG' : '▼ SHORT'} · 5m close ${new Date(cs[i][0] + IV_MS[TRADE_IV])
@@ -806,13 +1344,21 @@ function renderTrade() {
                     : t.cand.st.ok ? 'Setup met · measured edge is negative, so skip it'
                     : 'No setup · waiting for all conditions on a closed 5m bar';
 
-  $('tPlan').innerHTML = t.fire ? [
-    ['Entry (next 5m open)', fmt(e)],
-    ['Stop · 1 ATR', `${fmt(stop)} (${stopPct.toFixed(2)}%)`],
-    ['Target · 2 ATR', `${fmt(tgt)} (${(stopPct * TRADE_RR).toFixed(2)}%)`],
-    ['Reward : risk', `${TRADE_RR} : 1`],
-    ['Notional at 1% risk', `${(0.01 / (stopPct / 100)).toFixed(1)}× equity`],
-    ['Margin lost at 10×', `${(stopPct * 10).toFixed(0)}% of margin`]
+  // The plan is the risk engine's answer for this exact entry, stop and hold — so the card
+  // quotes the size, margin and liquidation reality for your account, not a generic example.
+  const rc = riskCalc(e, a, dir, TRADE_IV, 1, TRADE_H);
+  $('tPlan').innerHTML = t.fire && rc ? [
+    ['Entry · next 5m open', fmt(e)],
+    ['Stop · 1 ATR', `${fmt(rc.stopPx)} (${(rc.stopPct * 100).toFixed(2)}%)`],
+    ['Target · 2 ATR', `${fmt(rc.tp2)} (${(rc.stopPct * TRADE_RR * 100).toFixed(2)}%)`],
+    ['Size', `${rc.qty.toFixed(5)} BTC · ${usd(rc.notional)}`],
+    ['Margin', `${usd(rc.margin)} · ${(rc.margin / risk.eq * 100).toFixed(0)}% of equity`],
+    ['Max loss', `${usd(rc.loss)} · ${(rc.loss / risk.eq * 100).toFixed(2)}% equity`],
+    ['Break-even', `${rc.beBps.toFixed(1)} bps · ${rc.beAtr.toFixed(2)} ATR`],
+    [rc.danger ? 'LEVERAGE TOO HIGH' : 'Liquidation ≈',
+     rc.danger ? `cap at ${Math.floor(rc.maxLev)}× — stop is ${(rc.stopPct * 100).toFixed(2)}%, liq ${(rc.liqPct * 100).toFixed(2)}%`
+               : `${fmt(rc.liq)} (${(rc.liqPct * 100).toFixed(1)}% away)`],
+    ['If it reaches 2R', `+${usd(rc.win2)} · fees ${usd(rc.qty * e * risk.feeBps / 1e4)}`]
   ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('') : '';
 
   $('tChecks').innerHTML = t.cand.st.checks.map(([k, ok]) =>
@@ -852,15 +1398,97 @@ function renderTrade() {
       + `not prediction. Net of ${pc(COST)} fees it is ${rR(st.avg)}. Do not take these trades.`;
 }
 
+// ---- risk & cost engine ----------------------------------------------------
+// A ticket needs three live numbers — price, ATR, direction — plus the account assumptions
+// below, which persist locally. Nothing here sends an order: it sizes and prices the trade
+// you are about to place by hand, including the parts that quietly eat the edge.
+const RISK_KEY = 'btc.risk.v1';
+const MMR = 0.005;            // tier-0 BTCUSDT maintenance margin, used only for the liquidation estimate
+const risk = { eq: 1000, pct: 1, lev: 10, stopAtr: 1.5, feeBps: 12, hold: 6, mode: 'isolated', side: 'auto' };
+try { Object.assign(risk, JSON.parse(localStorage.getItem(RISK_KEY) || '{}')); } catch (e) { /* first run */ }
+const riskSave = () => { try { localStorage.setItem(RISK_KEY, JSON.stringify(risk)); } catch (e) { /* private mode */ } };
 
-const state = { src: null, candles: null, stats: null, deriv: null, sig: null, fc: null, act: null,
+// dist = stop distance in price units; fund and loss are costs, positive when they leave your pocket.
+function riskCalc(P, A, dir, ivName, stopMult, holdBars) {
+  if (!P || !A) return null;
+  const feePct = risk.feeBps / 1e4, feeUsd = P * feePct;
+  const dist = A * (stopMult == null ? risk.stopAtr : stopMult);
+  const perBtc = dist + feeUsd;
+  const riskUsd = risk.eq * risk.pct / 100;
+  let qty = riskUsd / perBtc;
+  const cap = risk.eq * risk.lev / P;         // isolated margin cannot exceed equity × leverage
+  const capped = qty > cap;
+  if (capped) qty = cap;
+  const notional = qty * P, margin = notional / risk.lev, loss = qty * perBtc;
+  const bars = holdBars == null ? risk.hold : holdBars;
+  const hours = bars * IV_MS[ivName] / 36e5;
+  const fr = state.deriv && state.deriv.funding;
+  const fundPerBtc = fr == null ? 0 : P * fr * (hours / 8) * dir;
+  const fund = fr == null ? null : qty * fundPerBtc;
+  const beUsd = feeUsd + fundPerBtc;
+  const liqPct = 1 / risk.lev - MMR;
+  return {
+    P, A, dir, dist, stopPct: dist / P, qty, notional, margin, loss, capped, riskUsd, hours, fund,
+    stopPx: P - dir * dist, liq: P * (1 - dir * liqPct), liqPct, danger: dist / P > liqPct,
+    maxLev: 1 / (dist / P + MMR), beBps: beUsd / P * 1e4, beAtr: beUsd / A,
+    tp1: P + dir * dist, tp2: P + dir * 2 * dist,
+    win1: qty * dist - qty * feeUsd - (fund || 0), win2: qty * 2 * dist - qty * feeUsd - (fund || 0)
+  };
+}
+
+function renderRisk() {
+  const out = $('rOut'), note = $('rNote');
+  if (!state.sig || !state.stats) { out.innerHTML = ''; return; }
+  const dir = risk.side === 'auto' ? (state.sig.score >= 0 ? 1 : -1) : +risk.side;
+  const c = riskCalc(state.stats.price, last(state.sig.atrS), dir, iv());
+  if (!c) { out.innerHTML = ''; return; }
+  const held = c.hours < 1 ? `${Math.round(c.hours * 60)}m` : `${c.hours.toFixed(c.hours < 10 ? 1 : 0)}h`;
+  const pctRisk = v => { const r = Math.round(v); return `${r < 0 ? '−' : ''}${Math.abs(r)}%`; };
+  out.innerHTML = [
+    ['Side', `${dir > 0 ? 'LONG' : 'SHORT'} · ${risk.stopAtr}× ATR stop`],
+    ['Stop', `${fmt(c.stopPx)} (${(c.stopPct * 100).toFixed(2)}%)`],
+    ['Size', `${c.qty.toFixed(5)} BTC · ${usd(c.notional)}`],
+    ['Margin', `${usd(c.margin)} · ${(c.margin / risk.eq * 100).toFixed(0)}% of equity`],
+    ['Max loss', `${usd(c.loss)} · ${(c.loss / risk.eq * 100).toFixed(2)}% equity · ${(c.loss / c.margin * 100).toFixed(0)}% margin`],
+    ['Liquidation ≈', risk.mode === 'cross' ? 'cross — account-wide'
+                                 : `${fmt(c.liq)} (${(c.liqPct * 100).toFixed(1)}% away)`],
+    [`Funding · ${held}`,
+     c.fund == null ? '—' : `${usd(c.fund)} · ${pctRisk(c.fund / c.riskUsd * 100)} of risk`],
+    ['Break-even', `${c.beBps.toFixed(1)} bps · ${c.beAtr.toFixed(2)} ATR`],
+    ['TP1 · 1R', `${fmt(c.tp1)} → ${usd(c.win1)}${c.win1 <= 0 ? ' (fees exceed 1R)' : ''}`],
+    ['TP2 · 2R', `${fmt(c.tp2)} → ${usd(c.win2)}`]
+  ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+
+  const clean = !c.danger && !c.capped && c.beAtr < .35;
+  note.className = 'edge ' + (clean ? 'real' : 'none');
+  note.textContent = c.danger
+    ? `Your ${risk.stopAtr}× ATR stop is ${(c.stopPct * 100).toFixed(2)}% away but liquidation at ${risk.lev}× `
+      + `is only ${(c.liqPct * 100).toFixed(2)}% away — the exchange closes you first. Cap leverage at `
+      + `${Math.floor(c.maxLev)}×, or the stop has no meaning.`
+    : c.capped
+    ? `Margin binds before risk does: ${risk.pct}% of equity wants ${usd(c.riskUsd)} at risk but ${risk.lev}× `
+      + `only supports ${usd(c.notional)} notional, so the real loss is ${usd(c.loss)} `
+      + `(${(c.loss / risk.eq * 100).toFixed(2)}% of equity), not the number you asked for.`
+    : !clean
+    ? `Break-even is ${c.beBps.toFixed(1)} bps — ${c.beAtr.toFixed(2)} of one ATR. The market has to move that `
+      + `far in your favour before the trade is worth anything, so a target closer than ~1 ATR is mostly fees.`
+    : `Costs ${c.beAtr.toFixed(2)} of an ATR and ${(c.loss / risk.eq * 100).toFixed(2)}% of equity if wrong. `
+      + `The arithmetic is sound; whether the direction is right is a separate, unproven question. `
+      + `Liquidation assumes isolated margin, one position, ${(MMR * 100).toFixed(1)}% maintenance.`;
+}
+
+
+const state = { src: null, candles: null, stats: null, deriv: null, sig: null, fc: null, deep: null, act: null,
                 prevPrice: null, ticks: 0, flips: 0, bid: null, ask: null, msgs: 0, msgRate: 0,
-                hoverT: null, hoverY: null };
+                hoverT: null, hoverY: null, lastReload: 0 };
 const live = { ws: null, timer: null, slow: null, render: null, watchdog: null, retry: null, mode: '',
                lastFlush: 0, beatAt: 0, lastKline: 0, topUp: false };
 const pending = { price: null, kline: null, funding: null, oi: null, bid: null, ask: null };
 const iv = () => $('interval').value;
-function setStatus(t, led) { $('status').textContent = t; $('led').className = 'led ' + (led || ''); }
+function setStatus(t, led) {
+  const c = 'led ' + (led || '');
+  $('status').textContent = t; $('led').className = c; $('mLed').className = c;
+}
 
 let loading = false;
 async function load() {
@@ -876,9 +1504,14 @@ async function load() {
       if (!candles || candles.length < 60) throw new Error('too few candles');
       Object.assign(state, { src: s, candles, stats, deriv, prevPrice: null,
                              ticks: 0, flips: 0, msgs: 0, tickBase: 0, msgRate: 0,
-                             hoverT: null, hoverY: null });
+                             hoverT: null, hoverY: null, lastReload: Date.now() });
+      // Keep the reader's window — same zoom, same anchored bar — so a minute refresh is
+      // invisible unless the data itself moved. Resetting to the live edge here is what made
+      // the loop look dead: panning back set the anchor, and the guard then skipped forever.
       view.tBars = Math.min(view.tBars, candles.length);
-      view.bars = view.tBars; view.off = 0; view.anchorT = null; view.dom = null;
+      view.bars = view.tBars;
+      view.off = clampOff(offFromAnchor());
+      view.dom = null;
       syncLiveBtn();
       recompute();
       startLive();
@@ -897,8 +1530,10 @@ function recompute() {
   const prev = state.sig ? state.sig.score : null;
   state.sig = buildSignals(state.candles, state.deriv, iv());
   state.fc = forecast(state.candles, state.sig, FC_H);
+  state.deep = analyze(state.candles, state.sig, state.fc, FC_H);
   if (prev != null && (crossed(prev, 0.2) || crossed(prev, -0.2))) state.flips++;
   render();
+  renderRisk();
 }
 function crossed(prev, th) { return (prev > th) !== (state.sig.score > th); }
 
@@ -946,7 +1581,9 @@ function flush() {
 // shown immediately after a reload, before the first tick has a chance to arrive
 function feedStatus() {
   setStatus(`${state.src.name} · ${live.mode}${live.ws ? '' : ' · connecting…'} · ${iv()}`
-            + ` · ${state.msgRate} msg/s · tick ${state.ticks}`, live.ws ? 'on' : 'slow');
+            + ` · ${state.msgRate} msg/s · tick ${state.ticks}`
+            + (state.lastReload ? ` · refreshed ${new Date(state.lastReload)
+                .toLocaleTimeString([], { hour12: false })}` : ''), live.ws ? 'on' : 'slow');
 }
 // The 5s loop has to keep turning even when the feed goes quiet: repaint the chart, and
 // if the websocket hasn't handed us a candle for a whole beat, top the last one up from REST.
@@ -1032,8 +1669,10 @@ function render() {
   ce.className = 'chg ' + (stats.chg >= 0 ? 'pos' : 'neg');
 
   const fc = state.fc;
-  // The actionable call comes from the forecast probability, not the raw composite.
-  const prob = fc ? fc.p : Math.max(0, Math.min(1, 0.5 + sig.score * 0.25));
+  const dp = state.deep;
+  // Two independent estimators, averaged, rather than one number dressed up as certainty.
+  const prob = dp && dp.pBlend != null ? dp.pBlend
+    : fc ? fc.p : Math.max(0, Math.min(1, 0.5 + sig.score * 0.25));
   const act = prob >= 0.55 ? 'BUY' : prob <= 0.45 ? 'SELL' : 'HOLD';
   const conf = Math.min(1, Math.abs(prob - 0.5) / 0.2);
 
@@ -1048,15 +1687,31 @@ function render() {
   $('glyph').setAttribute('d', GLYPH[act.toLowerCase()]);
   $('ring').setAttribute('stroke-dashoffset', (RING_C * (1 - conf)).toFixed(2));
   $('conf').innerHTML = `<b>${(conf * 100).toFixed(0)}%</b> conviction · `
-    + (fc ? `${fc.m} similar bars` : 'no backtest yet');
+    + (fc && dp && dp.ana ? `${fc.m} matching signals · ${dp.ana.m} analogues`
+       : fc ? `${fc.m} similar bars` : 'no backtest yet');
 
   const bar = $('strbar');
   bar.style.width = conf * 100 + '%';
   bar.style.background = act === 'BUY' ? 'var(--up)' : act === 'SELL' ? 'var(--down)' : 'var(--flat)';
 
+  const measured = (fc && fc.real) || (dp && dp.ana && dp.ana.real);
   $('verdict').innerHTML = `${(prob * 100).toFixed(0)}% odds up · next ${FC_H} × ${iv()}`
-    + (fc && !fc.real ? ` · <span style="color:var(--flat)">edge not measurable</span>` : '');
+    + (measured ? ` · <span style="color:var(--up)">one estimator beats its base rate</span>`
+                : ` · <span style="color:var(--flat)">edge not measurable</span>`);
   state.act = act;
+
+  // The pinned bar mirrors the emblem rather than recomputing anything, so the two
+  // can never disagree about what the model said.
+  $('mPrice').textContent = pe.textContent;
+  const mce = $('mChg');
+  mce.textContent = ce.textContent.replace(' 24h', '');
+  mce.className = 'chg ' + (stats.chg >= 0 ? 'pos' : 'neg');
+  const mcall = $('mCall');
+  mcall.textContent = act; mcall.className = 'ccall ' + act.toLowerCase();
+  $('mProb').textContent = `${(prob * 100).toFixed(0)}% up · ${FC_H} × ${iv()}`;
+  const mn = $('mNote');
+  mn.textContent = measured ? 'estimator beats base rate' : 'edge not measurable';
+  mn.style.color = measured ? 'var(--up)' : 'var(--flat)';
 
   $('rows').innerHTML = sig.parts.map(p => {
     const w = Math.abs(p.v) * 50;
@@ -1101,7 +1756,7 @@ function render() {
     e.className = 'edge none';
     e.textContent = 'Needs at least 40 closed bars to measure anything. No prediction is being made.';
   } else {
-    const up = Math.round(fc.p * 100);
+    const up = Math.round(prob * 100);
     $('pfup').style.width = up + '%';
     $('pfdn').style.width = (100 - up) + '%';
     $('pfupt').textContent = 'UP ' + up + '%';
@@ -1115,7 +1770,7 @@ function render() {
       ['Resolved up', pc(fc.emp)],
       ['Up rate always', pc(fc.base)],
       ['Signal role', fc.role],
-      ['Model probability', `${up}% ±${(fc.ci * 100).toFixed(0)}`],
+      ['Blended probability', `${up}% ±${(fc.ci * 100).toFixed(0)} (signal bucket alone ${Math.round(fc.p * 100)}%)`],
       ['Expected move', `${fc.drift >= 0 ? '+' : ''}${fc.drift.toFixed(0)} USD`],
       ['1σ range', `${fmt(fc.lo)} – ${fmt(fc.hi)}`],
       ['60-bar resistance', fmt(fc.res)],
@@ -1133,6 +1788,156 @@ function render() {
   }
 
   drawChart();
+  renderEngine(fc, state.deep);
+  drawFan();
+  syncHints();
+}
+
+// ---- forecast engine rendering ---------------------------------------------
+// The header badge has ~90px to work in, so it carries the grade and one honest word;
+// the full sentence the grade is based on stays in the card body.
+const GRADE_SHORT = { A: 'MEASURED', B: 'PARTLY', C: 'COIN FLIP', D: 'CONFLICT' };
+function renderEngine(fc, dp) {
+  const g = $('grade');
+  const pc = v => v == null ? '—' : Math.round(v * 100) + '%';
+  $('lgAnom').hidden = !(dp && dp.an.recent.length);
+  if (!dp) {
+    g.className = 'grade d'; g.textContent = 'no sample';
+    ['est', 'scen', 'trendKv', 'patList', 'anomList', 'riskList', 'actList'].forEach(id => { $(id).innerHTML = ''; });
+    $('fanCap').textContent = 'Needs 90+ closed bars before analogue matching can run.';
+    return;
+  }
+  g.className = 'grade ' + dp.letter.toLowerCase();
+  g.textContent = `${dp.letter} · ${GRADE_SHORT[dp.letter]}`;
+
+  $('est').innerHTML = [
+    ['signal bucket', pc(dp.pBucket)], ['analogue neighbours', pc(dp.pAna)],
+    ['blended', pc(dp.pBlend)], ['base rate', pc(dp.baseUp)],
+    dp.spread != null ? ['estimator gap', Math.round(dp.spread * 100) + 'pt'] : null
+  ].filter(Boolean).map(([k, v], i) => `${i ? '<i>·</i>' : ''}<span>${k} <b>${v}</b></span>`).join('');
+
+  const a = dp.ana;
+  $('scen').innerHTML = a ? [
+    ['Analogue set', `${a.m} non-overlapping matches · distance ${a.spread[0].toFixed(2)}–${a.spread[a.m - 1].toFixed(2)}`],
+    ['Closes up', `${pc(a.hit)} of ${a.m} vs ${pc(a.baseUp)} of every bar`],
+    ['Median outcome', `${a.med[a.h - 1] >= 0 ? '+' : ''}${a.med[a.h - 1].toFixed(2)} ATR`],
+    ['Outcome spread', `${a.worst.toFixed(1)} to +${a.best.toFixed(1)} ATR`],
+    [`Trades above ${fmt(a.res)}`, `${pc(a.touchRes)} of the analogues`],
+    [`Trades below ${fmt(a.sup)}`, `${pc(a.touchSup)} of the analogues`]
+  ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('')
+   : '<span>Analogues</span><span>not enough history</span>';
+
+  $('trendKv').innerHTML = [
+    ['Regime', dp.regime],
+    ['Swing structure', dp.struct],
+    ['20-bar slope', `${dp.sl20 >= 0 ? '+' : ''}${dp.sl20.toFixed(3)} ATR/bar · R² ${dp.r2.toFixed(2)}`],
+    ['50-bar slope', `${dp.sl50 >= 0 ? '+' : ''}${dp.sl50.toFixed(3)} ATR/bar · R² ${dp.r250.toFixed(2)}`],
+    ['Volatility rank', dp.volPct == null ? '—' : `${Math.round(dp.volPct * 100)}th percentile of the buffer`],
+    ['ATR now', fmt(dp.atr)]
+  ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+
+  $('patList').innerHTML = dp.pats.length ? dp.pats.map(p => {
+    const edge = p.up == null || dp.baseUp == null ? null : p.up - dp.baseUp;
+    const col = edge == null || Math.abs(edge) < .06 ? 'var(--flat)' : edge > 0 ? 'var(--up)' : 'var(--down)';
+    const tag = p.dir > 0 ? 'bullish' : p.dir < 0 ? 'bearish' : 'neutral';
+    return `<div class="prow"><b>${p.label} <span class="v" style="color:var(--dim2);font-weight:600">· ${tag}</span></b>`
+      + `<span class="v" style="color:${col}">${pc(p.up)} up</span>`
+      + `<span class="d">${p.n} prior occurrence${p.n === 1 ? '' : 's'} on ${iv()} against a ${pc(dp.baseUp)} base rate · mean ${
+        p.avg == null ? '—' : (p.avg >= 0 ? '+' : '') + p.avg.toFixed(2)} ATR after ${FC_H} bars${
+        edge != null && Math.abs(edge) >= .06 ? '' : ' — not separable from the base rate, so it is context, not a cue'}.</span></div>`;
+  }).join('') : '<div class="none">No candlestick pattern is active on the last closed bar.</div>';
+
+  const zn = Object.entries(dp.an.now), fl = dp.an.flags.slice(0, 6);
+  $('anomList').innerHTML =
+    (zn.length ? `<div class="zline">last closed bar: ${zn.map(([k, v]) =>
+        `<b class="${Math.abs(v) >= ANOM_Z ? 'hot' : Math.abs(v) >= ANOM_Z - 1 ? 'warm' : ''}">${k} ${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}σ</b>`
+      ).join(' · ')}</div>` : '')
+    + (fl.length ? fl.map(f => `<div class="prow"><b>${f.name}</b><span class="v" style="color:#fb7185">${
+        f.z > 0 ? '+' : '−'}${Math.abs(f.z).toFixed(1)}σ</span><span class="d">${
+        new Date(f.t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · ${
+        Math.abs(f.z) >= 5 ? 'extreme' : 'notable'} against the trailing 140 closed bars, median/MAD${
+        f.name === 'volume' ? ' on log volume' : ''}.</span></div>`).join('')
+      : `<div class="none">Nothing in the trailing 140 closed bars clears ${ANOM_Z}σ on volume, bar size, range or taker flow.</div>`);
+
+  $('riskList').innerHTML = dp.risks.map(r => `<li>${r}</li>`).join('') || '<li>Nothing flagged.</li>';
+  $('actList').innerHTML = dp.acts.map(r => `<li>${r}</li>`).join('');
+  $('fanCap').textContent = a
+    ? `Every faint line is what happened next after a bar shaped like the last ${a.W}. That is history, not a forecast — ${
+        pc(a.baseUp)} of all bars close up over ${FC_H} anyway, and this set says ${pc(a.hit)}.`
+    : 'Not enough history to match bar shapes.';
+}
+
+function drawFan() {
+  const cv = $('fan');
+  if (!cv || document.hidden) return;
+  const cssW = cv.clientWidth || 300, cssH = 134;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const pw = Math.round(cssW * dpr), ph = Math.round(cssH * dpr);
+  if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  ctx.font = '10.5px system-ui'; ctx.lineWidth = 1;
+  const a = state.deep && state.deep.ana;
+  if (!a) { ctx.fillStyle = '#6b7280'; ctx.fillText('not enough history for analogue matching', 10, cssH / 2); return; }
+
+  const padL = 8, padR = 46, padT = 14, padB = 16;
+  const W = cssW - padL - padR, H = cssH - padT - padB;
+  const h = a.h, Wn = a.W, tot = Wn + h;
+  const x = i => padL + ((i + .5) / tot) * W;
+  let acc = 0;
+  const lead = a.recent.map(r => { acc += r; return acc; }).map(v => v - acc);
+  let lo = 0, hi = 0;
+  a.paths.forEach(p => p.forEach(v => { if (v < lo) lo = v; if (v > hi) hi = v; }));
+  lead.forEach(v => { if (v < lo) lo = v; if (v > hi) hi = v; });
+  const pad = (hi - lo) * .14 || .5;
+  lo -= pad; hi += pad;
+  const y = v => padT + (1 - (v - lo) / (hi - lo)) * H;
+  const jx = x(Wn - 1);
+
+  ctx.fillStyle = '#7b8496';
+  for (const v of [0, 1, -1, 2, -2]) {
+    if (v > hi || v < lo) continue;
+    const yy = Math.round(y(v)) + .5;
+    ctx.strokeStyle = v === 0 ? '#2b3548' : '#161d2b';
+    ctx.setLineDash(v === 0 ? [] : [2, 4]);
+    ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + W, yy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillText(v === 0 ? 'start' : `${v > 0 ? '+' : '−'}${Math.abs(v)} ATR`, padL + W + 5, yy + 3.5);
+  }
+
+  ctx.strokeStyle = 'rgba(148,163,184,.18)';
+  a.paths.forEach(p => {
+    ctx.beginPath(); ctx.moveTo(jx, y(0));
+    p.forEach((v, t) => ctx.lineTo(x(Wn + t), y(v)));
+    ctx.stroke();
+  });
+  ctx.beginPath();
+  ctx.moveTo(jx, y(0));
+  a.hi.forEach((v, t) => ctx.lineTo(x(Wn + t), y(v)));
+  for (let t = a.lo.length - 1; t >= 0; t--) ctx.lineTo(x(Wn + t), y(a.lo[t]));
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(59,130,246,.16)'; ctx.fill();
+
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1.6; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  lead.forEach((v, i) => i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(0), y(v)));
+  ctx.stroke();
+
+  ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.moveTo(jx, y(0));
+  a.med.forEach((v, t) => ctx.lineTo(x(Wn + t), y(v)));
+  ctx.stroke();
+  ctx.lineWidth = 1; ctx.lineJoin = 'miter';
+
+  ctx.strokeStyle = '#394459'; ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(jx, padT - 4); ctx.lineTo(jx, padT + H); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#9ca3af'; ctx.fillText('now', jx + 4, padT - 5);
+  ctx.textAlign = 'right'; ctx.fillStyle = '#60a5fa';
+  ctx.fillText(`+${h} bars`, padL + W, padT - 5);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#60a5fa';
+  ctx.beginPath(); ctx.arc(x(Wn + h - 1), y(a.med[h - 1]), 3, 0, Math.PI * 2); ctx.fill();
 }
 
 let chartGeo = null;
@@ -1146,7 +1951,12 @@ function drawChart() {
   if (!state.candles || document.hidden) return;
   const cv = $('chart');
   const cssW = cv.clientWidth || 700;
-  const cssH = Math.max(300, Math.min(540, Math.round(cssW * .62)));
+  const PH = 76, PG = 12;                                // sub-pane height + gap
+  const panes = ['rsi', 'macd'].filter(k => chartOn[k]);
+  const extra = panes.length * (PH + PG);
+  // Sub-panes are bolted on below the plot rather than carved out of it, so the price action
+  // keeps exactly the height it had with nothing switched on.
+  const cssH = Math.max(300, Math.min(540, Math.round(cssW * .62))) + extra;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const pw = Math.round(cssW * dpr), ph = Math.round(cssH * dpr);
   if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; cv.style.height = cssH + 'px'; }
@@ -1162,12 +1972,17 @@ function drawChart() {
   const s0 = total - off - bars, s1 = total - off;
   const V = candles.slice(s0, s1);
   const e9 = sig.e9.slice(s0, s1), e21 = sig.e21.slice(s0, s1), e50 = sig.e50.slice(s0, s1);
+  const bbU = sig.boll.up.slice(s0, s1), bbD = sig.boll.dn.slice(s0, s1), bbM = sig.boll.mid.slice(s0, s1);
+  const vwS = sig.vwap.slice(s0, s1);
+  const rsiS = sig.rsi.slice(s0, s1);
+  const mLine = sig.macd.line.slice(s0, s1), mSignal = sig.macd.signal.slice(s0, s1), mHist = sig.macd.hist.slice(s0, s1);
   const n = V.length;
   const isLive = off === 0;
 
   const padL = 10, padR = 86, padT = 12, padB = 26, gap = 10;
   const W = cssW - padL - padR, H = cssH - padT - padB;
-  const Hv = Math.max(34, Math.round(H * .13)), Hp = H - Hv - gap;   // volume strip + price pane
+  const coreH = H - extra;
+  const Hv = Math.max(34, Math.round(coreH * .13)), Hp = coreH - Hv - gap;   // volume strip + price pane
   const Wc = fc && isLive ? W * .78 : W;
   const price = state.stats.price;
   const proj = [];
@@ -1186,6 +2001,8 @@ function drawChart() {
     if (c[5] > volMax) volMax = c[5];
     const v = e50[i];
     if (v != null) { if (v > tHi) tHi = v; if (v < tLo) tLo = v; }
+    if (chartOn.bb && bbU[i] != null) { if (bbU[i] > tHi) tHi = bbU[i]; if (bbD[i] < tLo) tLo = bbD[i]; }
+    if (chartOn.vwap && vwS[i] != null) { if (vwS[i] > tHi) tHi = vwS[i]; if (vwS[i] < tLo) tLo = vwS[i]; }
   }
   for (const p of proj) { if (p.up > tHi) tHi = p.up; if (p.dn < tLo) tLo = p.dn; }
   const head = (tHi - tLo) * .06 || 1;
@@ -1202,10 +2019,39 @@ function drawChart() {
   const px = k => x(n - 1) + (k / FC_H) * (W - Wc);
   const y = v => padT + (1 - (v - lo) / rng) * Hp;
   const yInv = py => lo + (1 - (py - padT) / Hp) * rng;
-  const volTop = padT + Hp + gap;
+  const volTop = padT + Hp + gap, volBot = volTop + Hv;
   const vy = v => volTop + Hv - (v / (volMax || 1)) * (Hv * .9);
+  const paneGeo = {};
+  panes.forEach((k, j) => {
+    const top = volBot + PG + j * (PH + PG);
+    paneGeo[k] = { top, h: PH, bot: top + PH };
+  });
+  const plotBot = volBot + extra;
+  const line = (series, col, lw, yf, dash) => {
+    const yy = yf || y;
+    ctx.strokeStyle = col; ctx.lineWidth = lw || 1; ctx.lineJoin = 'round';
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath();
+    let started = false;
+    series.forEach((v, i) => {
+      if (v == null) return;
+      started ? ctx.lineTo(x(i), yy(v)) : ctx.moveTo(x(i), yy(v));
+      started = true;
+    });
+    ctx.stroke();
+    if (dash) ctx.setLineDash([]);
+    ctx.lineWidth = 1; ctx.lineJoin = 'miter';
+  };
+  // value tags live in the right gutter, clamped so a pane sitting near an edge can't spill
+  const gutterTag = (py, txt, bg, fg) => {
+    const yy = Math.round(Math.max(padT + 8, Math.min(plotBot - 8, py)));
+    ctx.fillStyle = bg; ctx.fillRect(padL + W + 3, yy - 8, padR - 6, 16);
+    ctx.fillStyle = fg; ctx.font = 'bold 10.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(txt, padL + W + 3 + (padR - 6) / 2, yy + 4);
+    ctx.textAlign = 'left'; ctx.font = '11px system-ui';
+  };
   chartGeo = { padL, step, n, wc: Wc, w: W, padT, volTop, Hv, hp: Hp, cssW, cssH,
-               times: V.map(c => c[0]), yInv };
+               times: V.map(c => c[0]), yInv, paneGeo, plotBot };
 
   // keep easing the axis until it has settled, then stop
   if (view.domRaf) { cancelAnimationFrame(view.domRaf); view.domRaf = 0; }
@@ -1232,7 +2078,7 @@ function drawChart() {
   tIdx.forEach(i => {
     const xx = Math.round(x(i)) + .5;
     ctx.strokeStyle = '#141a26';
-    ctx.beginPath(); ctx.moveTo(xx, padT); ctx.lineTo(xx, volTop + Hv); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xx, padT); ctx.lineTo(xx, plotBot); ctx.stroke();
     const lbl = stamp(V[i][0]), lw = ctx.measureText(lbl).width;
     const lx = Math.min(padL + W - lw, Math.max(padL, x(i) - lw / 2));
     if (lx + lw > lastLblR - 8) return;
@@ -1256,10 +2102,86 @@ function drawChart() {
   const dense = step < 1.5;                      // bodies would blur into noise below ~1.5px per bar
   const cw = dense ? Math.max(1, step) : Math.max(2, Math.min(16, step * 0.68));
 
+  const paneFrame = (g, name) => {
+    ctx.strokeStyle = '#1b2233';
+    ctx.beginPath(); ctx.moveTo(padL, g.top - PG / 2 + .5); ctx.lineTo(padL + W, g.top - PG / 2 + .5); ctx.stroke();
+    ctx.fillStyle = '#7b8496'; ctx.font = '10.5px system-ui';
+    ctx.fillText(name, padL + 2, g.top + 11);
+    ctx.font = '11px system-ui';
+  };
+
+  if (paneGeo.rsi) {
+    const g = paneGeo.rsi, ry = v => g.top + (1 - v / 100) * g.h;
+    g.inv = py => 100 * (1 - (py - g.top) / g.h);
+    g.fmt = v => v.toFixed(1);
+    paneFrame(g, 'RSI 14');
+    ctx.fillStyle = 'rgba(234,57,67,.06)'; ctx.fillRect(padL, ry(100), W, ry(70) - ry(100));
+    ctx.fillStyle = 'rgba(22,199,132,.06)'; ctx.fillRect(padL, ry(30), W, ry(0) - ry(30));
+    ctx.font = '10.5px system-ui';
+    [70, 50, 30].forEach(v => {
+      const yy = Math.round(ry(v)) + .5;
+      ctx.strokeStyle = v === 50 ? '#1b2233' : 'rgba(148,163,184,.25)';
+      if (v !== 50) ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + W, yy); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#7b8496'; ctx.fillText(String(v), padL + W + 8, yy + 4);
+    });
+    ctx.font = '11px system-ui';
+    line(rsiS, '#22d3ee', 1.6, ry);
+    const rv = last(rsiS);
+    if (rv != null) gutterTag(ry(rv), rv.toFixed(1), 'rgba(34,211,238,.85)', '#04121a');
+  }
+
+  if (paneGeo.macd) {
+    const g = paneGeo.macd;
+    let mm = 0;
+    [mLine, mSignal, mHist].forEach(a => a.forEach(v => { if (v != null && Math.abs(v) > mm) mm = Math.abs(v); }));
+    mm = mm || 1;
+    const my = v => g.top + (1 - (v + mm) / (2 * mm)) * g.h;
+    g.inv = py => (1 - (py - g.top) / g.h) * 2 * mm - mm;
+    g.fmt = v => NF2.format(v);
+    paneFrame(g, 'MACD 12 / 26 / 9');
+    ctx.font = '10.5px system-ui';
+    [-mm, 0, mm].forEach(v => {
+      const yy = Math.round(my(v)) + .5;
+      ctx.strokeStyle = v === 0 ? '#2b3548' : '#1b2233';
+      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + W, yy); ctx.stroke();
+      ctx.fillStyle = '#7b8496';
+      ctx.fillText(NF2.format(v), padL + W + 8, Math.max(g.top + 11, Math.min(g.bot - 3, yy + 4)));
+    });
+    ctx.font = '11px system-ui';
+    mHist.forEach((h, i) => {
+      if (h == null) return;
+      ctx.fillStyle = h >= 0 ? 'rgba(22,199,132,.55)' : 'rgba(234,57,67,.55)';
+      const a = my(Math.max(0, h)), b = my(Math.min(0, h));
+      ctx.fillRect(x(i) - cw / 2, a, Math.max(1, cw), Math.max(.8, b - a));
+    });
+    line(mLine, '#60a5fa', 1.5, my);
+    line(mSignal, '#f5a524', 1.3, my);
+    const hv = last(mHist);
+    if (hv != null) gutterTag(my(hv), NF2.format(hv), hv >= 0 ? 'rgba(22,199,132,.85)' : 'rgba(234,57,67,.85)', '#04121a');
+  }
+
+  if (chartOn.bb) {
+    // Band first, candles on top: a 20-bar, 2σ envelope is a region, and regions read
+    // correctly only underneath the price they describe.
+    ctx.beginPath();
+    let started = false, endUp = -1;
+    bbU.forEach((v, i) => { if (v == null) return; endUp = i;
+      started ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)); started = true; });
+    if (started) {
+      for (let i = endUp; i >= 0; i--) if (bbD[i] != null) ctx.lineTo(x(i), y(bbD[i]));
+      ctx.closePath(); ctx.fillStyle = 'rgba(129,140,170,.12)'; ctx.fill();
+    }
+    line(bbU, 'rgba(148,163,184,.6)', 1, y);
+    line(bbD, 'rgba(148,163,184,.6)', 1, y);
+    line(bbM, 'rgba(148,163,184,.45)', 1, y, [4, 3]);
+  }
+
   const hIdx = state.hoverT == null ? -1 : V.findIndex(c => c[0] === state.hoverT);
   if (hIdx >= 0) {
     ctx.fillStyle = 'rgba(255,255,255,.05)';
-    ctx.fillRect(x(hIdx) - step / 2, padT, step, volTop + Hv - padT);
+    ctx.fillRect(x(hIdx) - step / 2, padT, step, plotBot - padT);
   }
 
   V.forEach((c, i) => {
@@ -1296,18 +2218,10 @@ function drawChart() {
   }
 
   // at high density EMA 9 just adds noise, so drop it from the dense view
-  const emas = [[e9, '#3b82f6', 2], [e21, '#f5a524', 1.8], [e50, '#a78bfa', 1.6]].filter((_, k) => !dense || k > 0);
-  emas.forEach(([series, col, lw]) => {
-    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.beginPath();
-    let started = false;
-    series.forEach((v, i) => {
-      if (v == null) return;
-      started ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v));
-      started = true;
-    });
-    ctx.stroke();
-  });
-  ctx.lineWidth = 1; ctx.lineJoin = 'miter';
+  [[e9, '#3b82f6', 2], [e21, '#f5a524', 1.8], [e50, '#a78bfa', 1.6]]
+    .filter((_, k) => !dense || k > 0)
+    .forEach(([series, col, lw]) => line(series, col, lw));
+  if (chartOn.vwap) line(vwS, '#e879f9', 1.9);
 
   const halo = (txt, tx, ty, col, align) => {
     ctx.textAlign = align || 'left';
@@ -1358,6 +2272,22 @@ function drawChart() {
     ctx.closePath(); ctx.fill();
   });
 
+  // Outliers get a marker on the bar itself, so an unusual print is visible where it happened
+  // rather than only as a line in the scan card.
+  const aflags = state.deep ? state.deep.an.recent : [];
+  if (aflags.length) {
+    ctx.fillStyle = '#f5a524';
+    aflags.forEach(f => {
+      const j = V.findIndex(c => c[0] === f.t);
+      if (j < 0) return;
+      const mx2 = x(j), my2 = Math.max(padT + 5, y(V[j][2]) - 8);
+      ctx.beginPath();
+      ctx.moveTo(mx2, my2 - 4); ctx.lineTo(mx2 + 3.5, my2);
+      ctx.lineTo(mx2, my2 + 4); ctx.lineTo(mx2 - 3.5, my2);
+      ctx.closePath(); ctx.fill();
+    });
+  }
+
   const py = Math.round(y(price)) + .5;
   ctx.strokeStyle = 'rgba(148,163,184,.5)'; ctx.setLineDash([5, 4]);
   ctx.beginPath(); ctx.moveTo(padL, py); ctx.lineTo(padL + W, py); ctx.stroke(); ctx.setLineDash([]);
@@ -1373,7 +2303,7 @@ function drawChart() {
     const c = V[hIdx], xx = x(hIdx);
     const prev = hIdx > 0 ? V[hIdx - 1] : (s0 > 0 ? candles[s0 - 1] : null);
     ctx.strokeStyle = 'rgba(148,163,184,.5)'; ctx.setLineDash([2, 3]);
-    ctx.beginPath(); ctx.moveTo(xx, padT); ctx.lineTo(xx, volTop + Hv); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(xx, padT); ctx.lineTo(xx, plotBot); ctx.stroke(); ctx.setLineDash([]);
 
     const body = ((c[4] - c[1]) / c[1]) * 100, gi = s0 + hIdx;
     const head = `${new Date(c[0]).toLocaleString([], { month: 'short', day: 'numeric',
@@ -1392,6 +2322,13 @@ function drawChart() {
       ['macd hist', sig.macd.hist[gi] == null ? '—' : NF2.format(sig.macd.hist[gi])],
       ['atr 14', sig.atrS[gi] == null ? '—' : NF2.format(sig.atrS[gi])]
     ];
+    if (chartOn.bb) rows.push(['bb 20 · 2σ', bbU[hIdx] == null ? '—'
+      : `${ax(bbM[hIdx])} ±${NF2.format(bbU[hIdx] - bbM[hIdx])} · %B ${bbU[hIdx] === bbD[hIdx] ? '—'
+         : (((c[4] - bbD[hIdx]) / (bbU[hIdx] - bbD[hIdx])) * 100).toFixed(0) + '%'}`]);
+    if (chartOn.vwap) rows.push(['session vwap', vwS[hIdx] == null ? '—'
+      : `${ax(vwS[hIdx])} · ${(((c[4] - vwS[hIdx]) / vwS[hIdx]) * 100).toFixed(2)}%`]);
+    const barAn = state.deep ? state.deep.an.flags.filter(f => f.t === c[0]) : [];
+    if (barAn.length) rows.push(['anomaly', barAn.map(f => `${f.name} ${f.z > 0 ? '+' : '−'}${Math.abs(f.z).toFixed(1)}σ`).join(' · ')]);
     const padx = 11, lh = 15;
     // a two-column box would bury the candles on short views: fall back to a compact OHLC column
     const twoCol = 152 * 2 + padx * 2 - 14 <= W * .6;
@@ -1418,16 +2355,37 @@ function drawChart() {
       ctx.textAlign = 'left';
     });
 
+    // One horizontal readout, but whichever band the cursor is in gets labelled —
+    // price, volume, then any open sub-pane.
     const cy = state.hoverY;
-    if (cy != null && cy > padT && cy < padT + Hp && Math.abs(cy - py) > 15) {
-      const yy = Math.round(cy) + .5;
-      ctx.strokeStyle = 'rgba(148,163,184,.32)'; ctx.setLineDash([2, 3]);
-      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + W, yy); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = '#2b3548'; ctx.fillRect(padL + W + 3, cy - 9, padR - 6, 18);
-      ctx.fillStyle = '#e5e7eb'; ctx.font = 'bold 11.5px system-ui';
-      ctx.fillText(ax(yInv(cy)), padL + W + 9, cy + 4);
-      ctx.font = '11px system-ui';
+    if (cy != null && cy > padT && cy < plotBot) {
+      const sep = volTop - gap / 2;
+      const inPane = panes.map(k => paneGeo[k]).find(g => cy >= g.top && cy <= g.bot);
+      let zone = null;
+      if (inPane) zone = { inv: inPane.inv, fmt: inPane.fmt };
+      else if (cy > sep && cy <= volBot) zone = { inv: t => ((volBot - t) / (Hv * .9)) * (volMax || 1),
+                                                  fmt: t => NF0.format(Math.max(0, t)) + ' BTC' };
+      else if (Math.abs(cy - py) > 15) zone = { inv: yInv, fmt: ax };
+      if (zone) {
+        const yy = Math.round(cy) + .5;
+        ctx.strokeStyle = 'rgba(148,163,184,.32)'; ctx.setLineDash([2, 3]);
+        ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + W, yy); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = '#2b3548'; ctx.fillRect(padL + W + 3, cy - 9, padR - 6, 18);
+        ctx.fillStyle = '#e5e7eb'; ctx.font = 'bold 11px system-ui';
+        ctx.fillText(zone.fmt(zone.inv(cy)), padL + W + 9, cy + 4);
+        ctx.font = '11px system-ui';
+      }
     }
+
+    ctx.font = '11px system-ui';
+    const tl = stamp(c[0]), lw2 = ctx.measureText(tl).width + 12;
+    const tx = Math.min(padL + W - lw2, Math.max(padL, xx - lw2 / 2));
+    ctx.fillStyle = '#2b3548';
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(tx, cssH - 23, lw2, 17, 4); ctx.fill(); }
+    else ctx.fillRect(tx, cssH - 23, lw2, 17);
+    ctx.fillStyle = '#e5e7eb'; ctx.textAlign = 'center';
+    ctx.fillText(tl, tx + lw2 / 2, cssH - 10);
+    ctx.textAlign = 'left';
   }
 
   $('barCount').textContent = `${bars} bars${isLive ? '' : ' · −' + off}`;
@@ -1511,6 +2469,7 @@ cvs.addEventListener('pointerleave', () => {
   if (!drag) { state.hoverT = state.hoverY = null; redraw(); }
 });
 cvs.addEventListener('dblclick', () => resetView(120));
+const KEYMAP = { b: 'bb', v: 'vwap', r: 'rsi', m: 'macd' };
 document.addEventListener('keydown', e => {
   if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
   const d = Math.max(1, Math.round(view.tBars * .15));
@@ -1519,6 +2478,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === '+' || e.key === '=') zoomTo(view.tBars * .72, 1);
   else if (e.key === '-' || e.key === '_') zoomTo(view.tBars / .72, 1);
   else if (e.key === 'Home') goLive();
+  else if (KEYMAP[e.key.toLowerCase()]) toggleChart(KEYMAP[e.key.toLowerCase()]);
   else return;
   e.preventDefault();
 });
@@ -1530,9 +2490,80 @@ $('pRight').onclick = () => panBy(-Math.max(1, Math.round(view.tBars * .2)));
 $('fitBtn').onclick = () => { view.tBars = totalBars(); goLive(); };
 $('liveBtn').onclick = goLive;
 
-new ResizeObserver(redraw).observe(cvs.parentElement);
+// Overlay / pane switches. Turning one on changes what is drawn, never what is measured.
+const CHIP_LABEL = { bb: 'BB', vwap: 'VWAP', rsi: 'RSI', macd: 'MACD' };
+function syncChips() {
+  document.querySelectorAll('#chartToggles .chip').forEach(b => {
+    const on = !!chartOn[b.dataset.k];
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+  const on = Object.keys(CHIP_LABEL).filter(k => chartOn[k]).map(k => CHIP_LABEL[k]);
+  $('paneHint').textContent = on.length ? on.join(' + ') : 'overlays off';
+  $('lgBB').hidden = !chartOn.bb;
+  $('lgVW').hidden = !chartOn.vwap;
+}
+function toggleChart(k) {
+  chartOn[k] = !chartOn[k];
+  chartSave(); syncChips();
+  view.dom = null;                       // the price domain depends on which overlays are on
+  redraw();
+}
+document.querySelectorAll('#chartToggles .chip').forEach(b => { b.onclick = () => toggleChart(b.dataset.k); });
+syncChips();
+
+// ---- card folding + pinned read-out ---------------------------------------
+// Six detail cards is a long scroll, so each folds back to its header and the choice
+// persists. A collapsed header still has to answer "is this worth opening?", so it
+// carries the one number that summarises the card.
+const FOLD_KEY = 'btc.folds.v1';
+const folds = {};
+try { Object.assign(folds, JSON.parse(localStorage.getItem(FOLD_KEY) || '{}')); } catch (e) { /* first run */ }
+const foldSave = () => { try { localStorage.setItem(FOLD_KEY, JSON.stringify(folds)); } catch (e) { /* private mode */ } };
+
+function applyFold(card) {
+  const open = folds[card.id] !== false;
+  card.classList.toggle('closed', !open);
+  card.querySelector('.card-t').setAttribute('aria-expanded', String(open));
+}
+document.querySelectorAll('.card.fold').forEach(card => {
+  applyFold(card);
+  card.querySelector('.card-t').onclick = () => {
+    folds[card.id] = folds[card.id] === false;
+    foldSave(); applyFold(card);
+  };
+});
+
+const kv1 = id => { const k = $(id); return k.children.length >= 2 ? `${k.children[0].textContent}: ${k.children[1].textContent}` : ''; };
+function syncHints() {
+  const d = state.deep;
+  const h = $('hFc');
+  h.className = 'hint' + (d ? ' g' + d.letter : '');
+  h.textContent = d && d.pBlend != null ? `${Math.round(d.pBlend * 100)}% up · ${GRADE_SHORT[d.letter].toLowerCase()}` : '';
+  $('hScan').textContent = d ? `${d.regime} · ${d.pats.length} pattern${d.pats.length === 1 ? '' : 's'} · ${d.an.recent.length} outlier${d.an.recent.length === 1 ? '' : 's'}` : '';
+  $('hTrade').textContent = $('tState').textContent;
+  $('hRisk').textContent = kv1('rOut');
+  $('hDeriv').textContent = kv1('deriv');
+}
+
+const cmdBar = $('cmdbar');
+new IntersectionObserver(([e]) => {
+  cmdBar.classList.toggle('on', !e.isIntersecting);
+  cmdBar.setAttribute('aria-hidden', String(e.isIntersecting));
+}, { rootMargin: '6px 0px 0px 0px' }).observe(document.querySelector('.topbar'));
+
+document.querySelectorAll('.cjump button').forEach(b => b.onclick = () => {
+  const card = $(b.dataset.jump);
+  if (card.classList.contains('fold') && folds[card.id] === false) {
+    folds[card.id] = true; foldSave(); applyFold(card);
+  }
+  card.scrollIntoView({ block: 'start' });
+});
+
+new ResizeObserver(() => { redraw(); drawFan(); }).observe(cvs.parentElement);
+new ResizeObserver(drawFan).observe($('fan'));
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) { view.dom = null; redraw(); }
+  if (!document.hidden) { view.dom = null; redraw(); drawFan(); }
 });
 setInterval(() => {
   const el = $('cdBar');
@@ -1542,13 +2573,39 @@ setInterval(() => {
 
 $('refresh').onclick = load;
 $('interval').onchange = load;
+
+// Risk engine inputs. Each field is an assumption about your account, not a measurement,
+// so they are yours to set and they persist locally; an impossible value flags itself
+// amber and is ignored rather than silently sizing a trade you did not ask for.
+const RISK_FIELDS = { rEq: ['eq', 10], rRisk: ['pct', 0.05], rLev: ['lev', 1],
+                      rStop: ['stopAtr', 0.25], rFee: ['feeBps', 0], rHold: ['hold', 1] };
+for (const [id, [key, min]] of Object.entries(RISK_FIELDS)) {
+  const el = $(id);
+  el.value = risk[key];
+  el.oninput = () => {
+    const v = +el.value, ok = Number.isFinite(v) && v >= min;
+    el.classList.toggle('warn', !ok);
+    if (ok) { risk[key] = v; riskSave(); renderRisk(); }
+  };
+}
+for (const id of ['rMode', 'rSide']) {
+  const el = $(id);
+  el.value = risk[id === 'rMode' ? 'mode' : 'side'];
+  el.onchange = () => {
+    if (id === 'rMode') risk.mode = el.value; else risk.side = el.value;
+    riskSave(); renderRisk();
+  };
+}
 window.addEventListener('beforeunload', stopLive);
 renderTrade();                       // placeholder until the first 5m sample lands
 setInterval(refreshTrade, 60000);    // a new closed 5m bar is all the card needs
 // Every minute, re-run the whole page-load path — history, 24h stats, derivatives, forecast and
-// the 5m trade sample. Runs in the background too; held back mid-drag and while the user is
-// reading history they have panned away from, so a refresh never yanks the chart out from under them.
-setInterval(() => { if (!drag && view.anchorT == null) load(); }, 60000);
+// the 5m trade sample. It defers only for the five seconds after you move the chart, so a gesture
+// is never interrupted, and never longer than that: an old pan used to silence it permanently.
+setInterval(() => {
+  if (drag || pinch || Date.now() - lastGesture < 5000) return;
+  load();
+}, 60000);
 load();
 </script>
 </body>
